@@ -35,6 +35,9 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication,
                      handleEventsForBackgroundURLSession identifier: String,
                      completionHandler: @escaping () -> Void) {
-        NetworkLayer.shared.backgroundCompletionHandler = completionHandler
+        // Handle background URLSession events through DownloadManager
+        Task {
+            await Container.shared.downloadManager().handleBackgroundEvents(completionHandler: completionHandler)
+        }
     }
 }
