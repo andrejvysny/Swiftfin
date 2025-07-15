@@ -6,51 +6,97 @@
 // Copyright (c) 2025 Jellyfin & Jellyfin Contributors
 //
 
+import Defaults
 import Factory
 import JellyfinAPI
 import SwiftUI
 
 struct DownloadTaskButton: View {
 
+    @Default(.accentColor)
+    private var accentColor
+
     @ObservedObject
     private var downloadManager: DownloadManager
-    @ObservedObject
-    private var downloadTask: DownloadTask
 
+    private let item: BaseItemDto
     private var onSelect: (DownloadTask) -> Void
+
+    @State
+    private var showingCancelConfirmation = false
 
     var body: some View {
         Button {
-            onSelect(downloadTask)
+            handleButtonTap()
         } label: {
-            switch downloadTask.state {
-            case .cancelled:
-                Image(systemName: "exclamationmark.circle.fill")
-                    .foregroundColor(.red)
+            switch currentTaskState {
             case .complete:
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(.green)
-            case .downloading:
-                EmptyView()
-//                CircularProgressView(progress: progress)
+                Image(systemName: "arrow.down.circle.fill")
+                    .foregroundStyle(.primary)
+            case let .downloading(progress):
+                CircularProgressView(progress: progress, size: 24, strokeWidth: 4)
             case .error:
-                Image(systemName: "exclamationmark.circle.fill")
-                    .foregroundColor(.red)
-            case .ready:
+                Image(systemName: "exclamationmark.circle")
+                    .foregroundStyle(.red)
+            case .ready, .cancelled:
                 Image(systemName: "arrow.down.circle")
+                    .foregroundStyle(.primary)
             }
         }
+        .alert("Cancel Download", isPresented: $showingCancelConfirmation) {
+            Button("Cancel Download", role: .destructive) {
+                if let currentTask = currentTask {
+                    downloadManager.cancel(task: currentTask)
+                }
+            }
+            Button("Keep Downloading", role: .cancel) {
+                // Do nothing, just dismiss the alert
+            }
+        } message: {
+            Text("Are you sure you want to cancel this download? This action cannot be undone.")
+        }
+    }
+
+    private var currentTask: DownloadTask? {
+        downloadManager.task(for: item)
+    }
+
+    private var currentTaskState: DownloadTask.State {
+        currentTask?.state ?? .ready
+    }
+
+    private func handleButtonTap() {
+        guard let currentTask = currentTask else {
+            // If no task exists, create a new one and start download
+            let newTask = DownloadTask(item: item)
+            downloadManager.download(task: newTask)
+            onSelect(newTask)
+            return
+        }
+
+        switch currentTask.state {
+        case .ready:
+            downloadManager.download(task: currentTask)
+        case .downloading:
+            showingCancelConfirmation = true
+        case .complete, .error, .cancelled:
+            // For completed downloads, we could potentially open the download details
+            // or just do nothing as per requirements
+
+            // TODO: add options for managing download - dropdown - Info, Delete ...
+            break
+        }
+
+        onSelect(currentTask)
     }
 }
 
 extension DownloadTaskButton {
 
     init(item: BaseItemDto) {
-        let downloadManager = Container.shared.downloadManager()
-
-        self.downloadTask = downloadManager.task(for: item) ?? .init(item: item)
+        self.item = item
+        self.downloadManager = Container.shared.downloadManager()
         self.onSelect = { _ in }
-        self.downloadManager = downloadManager
     }
 
     func onSelect(_ action: @escaping (DownloadTask) -> Void) -> Self {

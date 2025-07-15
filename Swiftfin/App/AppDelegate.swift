@@ -31,4 +31,13 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
         return true
     }
+
+    func application(_ application: UIApplication,
+                     handleEventsForBackgroundURLSession identifier: String,
+                     completionHandler: @escaping () -> Void) {
+        // Handle background URLSession events through DownloadManager
+        Task {
+            await Container.shared.downloadManager().handleBackgroundEvents(completionHandler: completionHandler)
+        }
+    }
 }
