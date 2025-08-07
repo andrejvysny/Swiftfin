@@ -7,11 +7,9 @@
 //
 
 import Defaults
-import Factory
+import JellyfinAPI
 import Logging
 import SwiftUI
-
-// TODO: fix play from beginning
 
 extension ItemView {
 
@@ -20,103 +18,115 @@ extension ItemView {
         @Default(.accentColor)
         private var accentColor
 
-        private let logger = Logger.swiftfin()
-
-        @Injected(\.downloadManager)
-        private var downloadManager
-
         @Router
         private var router
 
         @ObservedObject
         var viewModel: ItemViewModel
 
+        private let logger = Logger.swiftfin()
+
+        // MARK: - Validation
+
+        private var isEnabled: Bool {
+            viewModel.selectedMediaSource != nil
+        }
+
+        // MARK: - Title
+
         private var title: String {
-            if let seriesViewModel = viewModel as? SeriesItemViewModel {
-                return seriesViewModel.playButtonItem?.seasonEpisodeLabel ?? L10n.play
+            /// Use the Season/Episode label for the Series ItemView
+            if let seriesViewModel = viewModel as? SeriesItemViewModel,
+               let seasonEpisodeLabel = seriesViewModel.playButtonItem?.seasonEpisodeLabel
+            {
+                return seasonEpisodeLabel
+
+                /// Use a Play/Resume label for single Media Source items that are not Series
+            } else if let playButtonLabel = viewModel.playButtonItem?.playButtonLabel {
+                return playButtonLabel
+
+                /// Fallback to a generic `Play` label
             } else {
-                return viewModel.playButtonItem?.playButtonLabel ?? L10n.play
+                return L10n.play
             }
         }
 
+        // MARK: - Media Source
+
+        private var source: String? {
+            guard let sourceLabel = viewModel.selectedMediaSource?.displayTitle,
+                  viewModel.item.mediaSources?.count ?? 0 > 1
+            else {
+                return nil
+            }
+
+            return sourceLabel
+        }
+
+        // MARK: - Body
+
         var body: some View {
             Button {
-                if let downloadTask = downloadManager.task(for: viewModel.item),
-                   case .complete = downloadTask.state
-                {
-                    logger.info("Playing downloaded content for item: \(viewModel.item.displayTitle)")
-                    router.route(
-                        to: .videoPlayer(
-                            manager: DownloadVideoPlayerManager(downloadTask: downloadTask)
-                        )
-                    )
-                } else if let playButtonItem = viewModel.playButtonItem,
-                          let selectedMediaSource = viewModel.selectedMediaSource
-                {
-                    logger.info("Playing online content for item: \(viewModel.item.displayTitle)")
-                    router.route(
-                        to: .videoPlayer(
-                            manager: OnlineVideoPlayerManager(
-                                item: playButtonItem,
-                                mediaSource: selectedMediaSource
-                            )
-                        )
-                    )
-                } else {
-                    logger.error("No media source available for item: \(viewModel.item.displayTitle)")
-                }
+                play()
             } label: {
                 ZStack {
                     Rectangle()
-                        .foregroundColor(viewModel.playButtonItem == nil ? Color(UIColor.secondarySystemFill) : accentColor)
+                        .foregroundStyle(isEnabled ? accentColor : Color.secondarySystemFill)
                         .cornerRadius(10)
 
                     HStack {
                         Image(systemName: "play.fill")
                             .font(.system(size: 20))
 
-                        Text(title)
-                            .font(.callout)
-                            .fontWeight(.semibold)
+                        VStack(alignment: .leading) {
+                            Text(title)
+                                .font(.callout)
+                                .fontWeight(.semibold)
 
-                        // Show offline indicator if downloaded
-                        if let downloadTask = downloadManager.task(for: viewModel.item),
-                           case .complete = downloadTask.state
-                        {
-                            Image(systemName: "arrow.down.circle.fill")
-                                .font(.system(size: 16))
-                                .foregroundColor(accentColor.overlayColor.opacity(0.8))
+                            if let source {
+                                Marquee(source, speed: 40, delay: 3, fade: 5)
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+                                    .frame(maxWidth: 175)
+                            }
                         }
                     }
-                    .foregroundColor(viewModel.playButtonItem == nil ? Color(UIColor.secondaryLabel) : accentColor.overlayColor)
+                    .foregroundStyle(isEnabled ? accentColor.overlayColor : Color(UIColor.secondaryLabel))
+                    .padding(.horizontal, 5)
                 }
             }
-            .disabled(viewModel.playButtonItem == nil)
             .contextMenu {
-                if viewModel.playButtonItem != nil, viewModel.item.userData?.playbackPositionTicks ?? 0 > 0 {
-                    Button {
-                        if var playButtonItem = viewModel.playButtonItem,
-                           let selectedMediaSource = viewModel.selectedMediaSource
-                        {
-                            /// Reset playback to the beginning
-                            playButtonItem.userData?.playbackPositionTicks = 0
-
-                            router.route(
-                                to: .videoPlayer(
-                                    manager: OnlineVideoPlayerManager(
-                                        item: playButtonItem,
-                                        mediaSource: selectedMediaSource
-                                    )
-                                )
-                            )
-                        } else {
-                            logger.error("No media source available")
-                        }
-                    } label: {
-                        Label(L10n.playFromBeginning, systemImage: "gobackward")
+                if viewModel.playButtonItem?.userData?.playbackPositionTicks != 0 {
+                    Button(L10n.playFromBeginning, systemImage: "gobackward") {
+                        play(fromBeginning: true)
                     }
                 }
             }
+            .disabled(!isEnabled)
+        }
+
+        // MARK: - Play Content
+
+        private func play(fromBeginning: Bool = false) {
+            guard var playButtonItem = viewModel.playButtonItem,
+                  let selectedMediaSource = viewModel.selectedMediaSource
+            else {
+                logger.error("Play selected with no item or media source")
+                return
+            }
+
+            if fromBeginning {
+                playButtonItem.userData?.playbackPositionTicks = 0
+            }
+
+            router.route(
+                to: .videoPlayer(
+                    manager: OnlineVideoPlayerManager(
+                        item: playButtonItem,
+                        mediaSource: selectedMediaSource
+                    )
+                )
+            )
         }
     }
 }

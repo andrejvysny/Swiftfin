@@ -204,6 +204,25 @@ struct VideoPlayer: View {
                 // Reset audio session when leaving
                 VLCVideoPlayer.resetAudioSession()
             }
+        }
+        .onChange(of: isScrubbing) { newValue in
+            guard !newValue else { return }
+            videoPlayerManager.proxy.setTime(.seconds(currentProgressHandler.scrubbedSeconds))
+        }
+        .onChange(of: subtitleColor) { newValue in
+            videoPlayerManager.proxy.setSubtitleColor(.absolute(newValue.uiColor))
+        }
+        .onChange(of: subtitleFontName) { newValue in
+            videoPlayerManager.proxy.setSubtitleFont(newValue)
+        }
+        .onChange(of: subtitleOffset) { newValue in
+            videoPlayerManager.proxy.setSubtitleDelay(.ticks(newValue))
+        }
+        .onChange(of: subtitleSize) { newValue in
+            videoPlayerManager.proxy.setSubtitleSize(.absolute(25 - newValue))
+        }
+        .onChange(of: videoPlayerManager.currentViewModel) { newViewModel in
+            guard let newViewModel else { return }
             .audioVideoModifiers(
                 audioOffset: audioOffset,
                 isAspectFilled: isAspectFilled,

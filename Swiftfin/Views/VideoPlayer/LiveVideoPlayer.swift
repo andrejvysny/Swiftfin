@@ -214,7 +214,7 @@ struct LiveVideoPlayer: View {
         }
         .onChange(of: subtitleSize) { newValue in
             Task { @MainActor in
-                videoPlayerManager.proxy.setSubtitleSize(.absolute(24 - newValue))
+                videoPlayerManager.proxy.setSubtitleSize(.absolute(25 - newValue))
             }
         }
         .onChange(of: videoPlayerManager.currentViewModel) { newViewModel in
