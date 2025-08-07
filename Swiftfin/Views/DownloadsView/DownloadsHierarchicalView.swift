@@ -360,6 +360,110 @@ struct EpisodeRow: View {
     }
 }
 
+// MARK: - Helper Functions
+
+/// Gets the display title for a download task, including version information if available
+private func getDisplayTitle(for downloadTask: DownloadTask) -> String {
+    if let mediaSource = downloadTask.item.mediaSources?.first {
+        let versionInfo = getVersionDisplayInfo(for: mediaSource)
+        if !versionInfo.isEmpty {
+            return "\(downloadTask.item.displayTitle) (\(versionInfo))"
+        }
+    }
+    return downloadTask.item.displayTitle
+}
+
+/// Extracts meaningful version information from a MediaSourceInfo for display
+private func getVersionDisplayInfo(for mediaSource: MediaSourceInfo) -> String {
+    var versionParts: [String] = []
+
+    // Add container format if available
+    if let container = mediaSource.container, !container.isEmpty {
+        versionParts.append(container.uppercased())
+    }
+
+    // Add video codec if available from video streams
+    if let videoStreams = mediaSource.videoStreams,
+       let firstVideo = videoStreams.first,
+       let codec = firstVideo.codec,
+       !codec.isEmpty
+    {
+        versionParts.append(codec.uppercased())
+    }
+
+    // Add resolution information if available from video streams
+    if let videoStreams = mediaSource.videoStreams,
+       let firstVideo = videoStreams.first,
+       let width = firstVideo.width,
+       let height = firstVideo.height
+    {
+        let resolution = "\(width)x\(height)"
+        versionParts.append(resolution)
+    }
+
+    // Add bitrate information if available from video streams
+    if let videoStreams = mediaSource.videoStreams,
+       let firstVideo = videoStreams.first,
+       let bitrate = firstVideo.bitRate,
+       bitrate > 0
+    {
+        let bitrateMB = bitrate / 1_000_000
+        versionParts.append("\(bitrateMB)Mbps")
+    }
+
+    // If we have meaningful version info, return it
+    if !versionParts.isEmpty {
+        return versionParts.joined(separator: " ")
+    }
+
+    // Fallback to media source ID prefix if no other info available
+    if let mediaSourceId = mediaSource.id, !mediaSourceId.isEmpty {
+        return String(mediaSourceId.prefix(8))
+    }
+
+    return ""
+}
+
+/// Extracts detailed version information for subtitle display
+private func getVersionDetails(for mediaSource: MediaSourceInfo) -> String {
+    var details: [String] = []
+
+    // Add container format
+    if let container = mediaSource.container, !container.isEmpty {
+        details.append("Container: \(container.uppercased())")
+    }
+
+    // Add video codec from video streams
+    if let videoStreams = mediaSource.videoStreams,
+       let firstVideo = videoStreams.first,
+       let codec = firstVideo.codec,
+       !codec.isEmpty
+    {
+        details.append("Codec: \(codec.uppercased())")
+    }
+
+    // Add resolution from video streams
+    if let videoStreams = mediaSource.videoStreams,
+       let firstVideo = videoStreams.first,
+       let width = firstVideo.width,
+       let height = firstVideo.height
+    {
+        details.append("Resolution: \(width)x\(height)")
+    }
+
+    // Add bitrate from video streams
+    if let videoStreams = mediaSource.videoStreams,
+       let firstVideo = videoStreams.first,
+       let bitrate = firstVideo.bitRate,
+       bitrate > 0
+    {
+        let bitrateMB = bitrate / 1_000_000
+        details.append("Bitrate: \(bitrateMB) Mbps")
+    }
+
+    return details.joined(separator: " • ")
+}
+
 // MARK: - Reusable Download Item Row (for Movies and Standalone Items)
 
 struct DownloadItemRow: View {
@@ -387,9 +491,23 @@ struct DownloadItemRow: View {
 
             // Info
             VStack(alignment: .leading, spacing: 4) {
-                Text(downloadTask.item.displayTitle)
+                // Show title with version information if available
+                let displayTitle = getDisplayTitle(for: downloadTask)
+
+                Text(displayTitle)
                     .font(.headline)
                     .lineLimit(1)
+
+                // Show detailed version information if available
+                if let mediaSource = downloadTask.item.mediaSources?.first {
+                    let versionDetails = getVersionDetails(for: mediaSource)
+                    if !versionDetails.isEmpty {
+                        Text(versionDetails)
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                            .lineLimit(1)
+                    }
+                }
 
                 if let overview = downloadTask.item.overview {
                     Text(overview)

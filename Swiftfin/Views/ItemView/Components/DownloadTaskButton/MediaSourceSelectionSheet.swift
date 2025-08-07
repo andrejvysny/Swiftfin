@@ -22,29 +22,25 @@ struct MediaSourceSelectionSheet: View {
 
     var body: some View {
         NavigationStack {
-            List(vm.mediaSources, id: \.id) { source in
-                let isDownloaded = source.id.map { vm.downloadedMediaSourceIds.contains($0) } ?? false
-
-                Button {
-                    if !isDownloaded {
-                        vm.beginDownload(with: source)
-                        dismiss()
-                    }
-                } label: {
-                    HStack {
+            List {
+                ForEach(vm.mediaSources, id: \.id) { source in
+                    VStack(alignment: .leading, spacing: 8) {
                         MediaSourceRow(source: source)
 
-                        Spacer()
-
-                        if isDownloaded {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(.green)
-                                .font(.title3)
+                        HStack {
+                            Spacer()
+                            Button {
+                                vm.beginDownload(with: source)
+                                dismiss()
+                            } label: {
+                                Label("Download", systemImage: "arrow.down.circle")
+                                    .font(.body)
+                            }
+                            .buttonStyle(.borderedProminent)
                         }
                     }
+                    .padding(.vertical, 4)
                 }
-                .buttonStyle(.plain)
-                .disabled(isDownloaded)
             }
             .navigationTitle("Select Version")
             .navigationBarTitleDisplayMode(.inline)

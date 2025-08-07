@@ -47,17 +47,23 @@ class DownloadTask: NSObject, ObservableObject {
 
     let item: BaseItemDto
 
+    // Store the specific media source being downloaded
+    let targetMediaSource: MediaSourceInfo?
+
+    // Track version number for file naming
+    private let versionNumber: Int
+
     var imagesFolder: URL? {
-        item.downloadFolder?.appendingPathComponent("Images")
+        getVersionSpecificFolder()?.appendingPathComponent("metadata")
     }
 
     var metadataFolder: URL? {
-        item.downloadFolder?.appendingPathComponent("Metadata")
+        getVersionSpecificFolder()?.appendingPathComponent("metadata")
     }
 
     // MARK: - Initialization
 
-    init(item: BaseItemDto) {
+    init(item: BaseItemDto, versionNumber: Int = 1) {
         let logger = Logger.swiftfin()
         logger.debug("Creating DownloadTask for item: \(item.displayTitle)")
         logger.debug("Item ID: \(item.id ?? "nil")")
@@ -65,12 +71,29 @@ class DownloadTask: NSObject, ObservableObject {
         logger.debug("Item download folder: \(item.downloadFolder?.path ?? "nil")")
 
         self.item = item
+        self.targetMediaSource = item.mediaSources?.first
+        self.versionNumber = versionNumber
+        logger.debug("Target media source: \(targetMediaSource?.id ?? "nil")")
+        logger.debug("Version number: \(versionNumber)")
+    }
+
+    init(item: BaseItemDto, mediaSource: MediaSourceInfo, versionNumber: Int = 1) {
+        let logger = Logger.swiftfin()
+        logger.debug("Creating DownloadTask for item: \(item.displayTitle) with specific media source: \(mediaSource.id ?? "nil")")
+        logger.debug("Item ID: \(item.id ?? "nil")")
+        logger.debug("Item type: \(item.type?.rawValue ?? "nil")")
+
+        self.item = item
+        self.targetMediaSource = mediaSource
+        self.versionNumber = versionNumber
+        logger.debug("Target media source: \(targetMediaSource?.id ?? "nil")")
+        logger.debug("Version number: \(versionNumber)")
     }
 
     // MARK: - Public API
 
     func createFolder() throws {
-        guard let downloadFolder = item.downloadFolder else { return }
+        guard let downloadFolder = getVersionSpecificFolder() else { return }
         try FileManager.default.createDirectory(at: downloadFolder, withIntermediateDirectories: true)
     }
 
@@ -84,7 +107,7 @@ class DownloadTask: NSObject, ObservableObject {
 
             // Check available storage before starting download
             #if os(iOS)
-            if let fileSize = item.mediaSources?.first?.size,
+            if let fileSize = targetMediaSource?.size,
                fileSize > 0
             {
                 let availableStorage = FileManager.default.availableStorage
@@ -196,23 +219,41 @@ class DownloadTask: NSObject, ObservableObject {
     // MARK: - File Management
 
     func deleteRootFolder() {
-        guard let downloadFolder = item.downloadFolder else {
+        guard let downloadFolder = getVersionSpecificFolder() else {
             logger.debug("No download folder to delete")
             return
         }
 
-        logger.debug("Deleting root folder: \(downloadFolder)")
+        logger.debug("Deleting version-specific folder: \(downloadFolder)")
 
         do {
             try FileManager.default.removeItem(at: downloadFolder)
-            logger.debug("Successfully deleted download folder")
+            logger.debug("Successfully deleted version-specific folder")
         } catch {
-            logger.error("Failed to delete download folder: \(error.localizedDescription)")
+            logger.error("Failed to delete version-specific folder: \(error.localizedDescription)")
         }
     }
 
     func encodeMetadata() -> Data {
         try! JSONEncoder().encode(item)
+    }
+
+    // MARK: - Version-Specific Folder Management
+
+    /// Gets the version-specific folder for this download task
+    private func getVersionSpecificFolder() -> URL? {
+        guard let baseDownloadFolder = item.downloadFolder else { return nil }
+
+        // If we have a target media source with ID, create a version-specific folder
+        if let mediaSourceId = targetMediaSource?.id {
+            let versionFolder = baseDownloadFolder.appendingPathComponent(mediaSourceId)
+            logger.debug("Using version-specific folder: \(versionFolder.path)")
+            return versionFolder
+        }
+
+        // Fallback to base folder for legacy downloads
+        logger.debug("Using base folder (legacy): \(baseDownloadFolder.path)")
+        return baseDownloadFolder
     }
 
     // MARK: - Download Implementation
@@ -221,6 +262,7 @@ class DownloadTask: NSObject, ObservableObject {
 
         let logger = Logger.swiftfin()
         logger.info("Starting media download for item: \(item.id ?? "unknown")")
+        logger.debug("Target media source: \(targetMediaSource?.id ?? "nil")")
 
         let client = APIClient(
             baseURL: Container.shared.currentUserSession()!.client.configuration.url,
@@ -228,8 +270,8 @@ class DownloadTask: NSObject, ObservableObject {
             userId: Container.shared.currentUserSession()!.user.id
         )
 
-        // Ensure download directory exists
-        guard let downloadFolder = item.downloadFolder else {
+        // Ensure download directory exists - use version-specific folder
+        guard let downloadFolder = getVersionSpecificFolder() else {
             logger.error("No download folder available for item")
             throw JellyfinAPIError("No download folder available")
         }
@@ -244,19 +286,42 @@ class DownloadTask: NSObject, ObservableObject {
             throw error
         }
 
-        // Create item-specific directory
+        // Create version-specific directory
         do {
             try FileManager.default.createDirectory(at: downloadFolder, withIntermediateDirectories: true, attributes: nil)
-            logger.debug("Created item download directory at: \(downloadFolder)")
+            logger.debug("Created version-specific download directory at: \(downloadFolder)")
         } catch {
-            logger.error("Failed to create item download directory: \(error)")
+            logger.error("Failed to create version-specific download directory: \(error)")
             throw error
+        }
+
+        // Determine the destination filename using MediaSourceInfo.id
+        let destinationFilename: String
+        if let mediaSourceId = targetMediaSource?.id,
+           let container = targetMediaSource?.container
+        {
+            // Use MediaSourceInfo.id as the filename with container extension
+            destinationFilename = "\(mediaSourceId).\(container.lowercased())"
+            logger.debug("Using MediaSourceInfo.id-based filename: \(destinationFilename)")
+        } else if let mediaSourceId = targetMediaSource?.id {
+            // Fallback to MediaSourceInfo.id with mp4 extension
+            destinationFilename = "\(mediaSourceId).mp4"
+            logger.debug("Using MediaSourceInfo.id-based filename with fallback extension: \(destinationFilename)")
+        } else if let container = targetMediaSource?.container {
+            // Fallback to version pattern if no MediaSourceInfo.id
+            destinationFilename = "version\(versionNumber).\(container.lowercased())"
+            logger.debug("Using version pattern filename: \(destinationFilename)")
+        } else {
+            // Final fallback
+            destinationFilename = "version\(versionNumber).mp4"
+            logger.debug("Using final fallback filename: \(destinationFilename)")
         }
 
         return try await withCheckedThrowingContinuation { continuation in
             client.downloadItem(
                 itemId: item.id ?? "",
-                destinationURL: downloadFolder.appendingPathComponent("Media"),
+                destinationURL: downloadFolder.appendingPathComponent(destinationFilename),
+                mediaSourceId: targetMediaSource?.id,
                 onProgress: { progress in
                     Task { @MainActor in
                         self.state = .downloading(progress)
@@ -266,12 +331,17 @@ class DownloadTask: NSObject, ObservableObject {
                     switch result {
                     case let .success(finalURL):
                         logger.info("Media download completed successfully for item: \(self.item.id ?? "unknown") at: \(finalURL)")
+                        logger.debug("Downloaded to version-specific folder: \(downloadFolder.path)")
 
                         // Save the actual filename for later retrieval
                         let actualFilename = finalURL.lastPathComponent
-                        if actualFilename != "Media" {
+                        if actualFilename != destinationFilename {
                             // Store the actual filename in metadata for later use
-                            UserDefaults.standard.set(actualFilename, forKey: "download_\(self.item.id ?? "")_filename")
+                            if let mediaSourceId = self.targetMediaSource?.id {
+                                let key = "download_\(self.item.id ?? "")_\(mediaSourceId)_filename"
+                                UserDefaults.standard.set(actualFilename, forKey: key)
+                                logger.debug("Stored actual filename '\(actualFilename)' with key: \(key)")
+                            }
                         }
 
                         continuation.resume()
@@ -368,7 +438,14 @@ class DownloadTask: NSObject, ObservableObject {
         let jsonEncoder = JSONEncoder()
         jsonEncoder.outputFormatting = .prettyPrinted
 
-        let itemJsonData = try! jsonEncoder.encode(item)
+        // Create a version-specific item with only the target media source
+        var versionSpecificItem = item
+        if let targetMediaSource = targetMediaSource {
+            // Only include the specific media source being downloaded
+            versionSpecificItem.mediaSources = [targetMediaSource]
+        }
+
+        let itemJsonData = try! jsonEncoder.encode(versionSpecificItem)
         let itemJson = String(data: itemJsonData, encoding: .utf8)
         let itemFileURL = metadataFolder.appendingPathComponent("Item.json")
 
@@ -398,7 +475,8 @@ class DownloadTask: NSObject, ObservableObject {
 
     func getMediaURL() -> URL? {
         do {
-            guard let downloadFolder = item.downloadFolder else {
+            // Use version-specific folder
+            guard let downloadFolder = getVersionSpecificFolder() else {
                 logger.error("No download folder available for item: \(item.id ?? "unknown")")
                 return nil
             }
@@ -408,17 +486,51 @@ class DownloadTask: NSObject, ObservableObject {
 
             // First check if we have a stored filename from the download
             var mediaFilename: String?
-            if let storedFilename = UserDefaults.standard.string(forKey: "download_\(item.id ?? "")_filename") {
-                // Verify the stored filename still exists
-                if contents.contains(storedFilename) {
-                    mediaFilename = storedFilename
-                    logger.debug("Using stored media filename: \(storedFilename)")
+
+            // Try version-specific key first
+            if let mediaSourceId = targetMediaSource?.id {
+                let versionKey = "download_\(item.id ?? "")_\(mediaSourceId)_filename"
+                if let storedFilename = UserDefaults.standard.string(forKey: versionKey) {
+                    // Verify the stored filename still exists
+                    if contents.contains(storedFilename) {
+                        mediaFilename = storedFilename
+                        logger.debug("Using stored media filename for version \(mediaSourceId): \(storedFilename)")
+                    }
                 }
             }
 
-            // If no stored filename or it doesn't exist, look for files starting with "Media"
+            // Fallback to legacy key if no version-specific key found
             if mediaFilename == nil {
-                mediaFilename = contents.first(where: { $0.starts(with: "Media") })
+                if let storedFilename = UserDefaults.standard.string(forKey: "download_\(item.id ?? "")_filename") {
+                    // Verify the stored filename still exists
+                    if contents.contains(storedFilename) {
+                        mediaFilename = storedFilename
+                        logger.debug("Using legacy stored media filename: \(storedFilename)")
+                    }
+                }
+            }
+
+            // If no stored filename or it doesn't exist, look for MediaSourceInfo.id-based files first
+            if mediaFilename == nil {
+                if let mediaSourceId = targetMediaSource?.id {
+                    // Look for files that start with the MediaSourceInfo.id
+                    mediaFilename = contents.first(where: { $0.starts(with: mediaSourceId) })
+
+                    if mediaFilename != nil {
+                        logger.debug("Found MediaSourceInfo.id-based file: \(mediaFilename!)")
+                    }
+                }
+            }
+
+            // If still no media file found, look for version files
+            if mediaFilename == nil {
+                // Look for version files (version1.mp4, version2.avi, etc.)
+                mediaFilename = contents.first(where: { $0.starts(with: "version\(versionNumber).") })
+
+                // If specific version not found, look for any version file
+                if mediaFilename == nil {
+                    mediaFilename = contents.first(where: { $0.starts(with: "version") })
+                }
             }
 
             // If still no media file found, look for common video extensions
@@ -450,7 +562,7 @@ class DownloadTask: NSObject, ObservableObject {
 
             guard let foundFilename = mediaFilename else {
                 logger.error("No media file found in download folder for item: \(item.id ?? "unknown")")
-                logger.error("Searched for: stored filename, files starting with 'Media', and common video extensions")
+                logger.error("Searched for: stored filename, MediaSourceInfo.id-based files, version files, and common video extensions")
                 return nil
             }
 
@@ -508,5 +620,46 @@ extension DownloadTask: Identifiable {
 
     var id: String {
         item.id!
+    }
+}
+
+// MARK: - URLSessionDownloadDelegate
+
+extension DownloadTask: URLSessionDownloadDelegate {
+
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didWriteData bytesWritten: Int64,
+        totalBytesWritten: Int64,
+        totalBytesExpectedToWrite: Int64
+    ) {
+        let progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
+
+        DispatchQueue.main.async {
+            self.state = .downloading(progress)
+        }
+    }
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {}
+
+    func urlSession(_ session: URLSession, didBecomeInvalidWithError error: Error?) {
+        guard let error else { return }
+
+        DispatchQueue.main.async {
+            self.state = .error(error)
+
+            Container.shared.downloadManager().remove(task: self)
+        }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        guard let error else { return }
+
+        DispatchQueue.main.async {
+            self.state = .error(error)
+
+            Container.shared.downloadManager().remove(task: self)
+        }
     }
 }

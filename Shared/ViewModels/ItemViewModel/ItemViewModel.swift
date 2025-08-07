@@ -59,6 +59,9 @@ class ItemViewModel: ViewModel, Stateful {
                 self.isDownloadableMediaEnabled = true
                 guard !item.isMissing else { return }
                 playButtonItem = newValue
+            case .series:
+                // Series can be downloaded for metadata/images only
+                self.isDownloadableMediaEnabled = true
             default: ()
             }
         }

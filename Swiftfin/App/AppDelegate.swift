@@ -43,6 +43,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
         // Store the completion handler to be called when background tasks finish
         // This will be handled by the APIClient when it receives background session events
-        BackgroundSessionManager.shared.storeCompletionHandler(completionHandler, for: identifier)
+        // Background session completion handler is no longer needed with the new download manager
+        // Directly call the completion handler
+        completionHandler()
     }
 }

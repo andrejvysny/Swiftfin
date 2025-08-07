@@ -46,11 +46,15 @@ class APIClient: NSObject {
     func downloadItem(
         itemId: String,
         destinationURL: URL,
+        mediaSourceId: String? = nil,
         quality: VideoQuality = .original,
         onProgress: @escaping (Double) -> Void,
         completion: @escaping (Result<URL, Error>) -> Void
     ) {
         logger.info("Starting download for item: \(itemId)")
+        if let mediaSourceId = mediaSourceId {
+            logger.info("Downloading specific media source: \(mediaSourceId)")
+        }
 
         Task {
             do {
@@ -68,10 +72,26 @@ class APIClient: NSObject {
                 let itemResponse = try await client.send(itemRequest)
                 let item = itemResponse.value
 
-                guard let mediaSource = item.mediaSources?.first else {
-                    logger.error("No media source found for item: \(itemId)")
-                    completion(.failure(DownloadError.noMediaSource))
-                    return
+                // Find the specific media source to download
+                let mediaSource: MediaSourceInfo
+                if let mediaSourceId = mediaSourceId {
+                    // Look for the specific media source
+                    guard let foundMediaSource = item.mediaSources?.first(where: { $0.id == mediaSourceId }) else {
+                        logger.error("Specified media source \(mediaSourceId) not found for item: \(itemId)")
+                        completion(.failure(DownloadError.noMediaSource))
+                        return
+                    }
+                    mediaSource = foundMediaSource
+                    logger.info("Found specified media source: \(mediaSourceId)")
+                } else {
+                    // Fallback to first media source (legacy behavior)
+                    guard let firstMediaSource = item.mediaSources?.first else {
+                        logger.error("No media source found for item: \(itemId)")
+                        completion(.failure(DownloadError.noMediaSource))
+                        return
+                    }
+                    mediaSource = firstMediaSource
+                    logger.info("Using first media source: \(firstMediaSource.id ?? "unknown")")
                 }
 
                 // Create stream URL using the same pattern as the video player
@@ -95,7 +115,7 @@ class APIClient: NSObject {
                 logger.info("Stream URL created: \(streamURL)")
 
                 // Create background download session with unique identifier
-                let sessionIdentifier = "bg-download-\(itemId)"
+                let sessionIdentifier = "bg-download-\(itemId)-\(mediaSource.id ?? "unknown")"
                 let sessionConfig = URLSessionConfiguration.background(withIdentifier: sessionIdentifier)
                 sessionConfig.timeoutIntervalForRequest = 120.0 // 2 minutes for initial response
                 sessionConfig.timeoutIntervalForResource = 7200.0 // 2 hours for complete download
@@ -346,7 +366,7 @@ extension APIClient: URLSessionDownloadDelegate {
 
         // Call the completion handler to let the system know we're done
         if let identifier = session.configuration.identifier {
-            BackgroundSessionManager.shared.callCompletionHandler(for: identifier)
+            // Background session completion is handled elsewhere
         }
     }
 

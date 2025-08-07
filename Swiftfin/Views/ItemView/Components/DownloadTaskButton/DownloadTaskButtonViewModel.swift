@@ -64,7 +64,10 @@ final class DownloadTaskButtonViewModel: ObservableObject {
     func handleTap() {
         switch uiState {
         case .ready, .error:
-            if mediaSources.count > 1 {
+            if item.type == .series && mediaSources.isEmpty {
+                // Series without media sources - download metadata/images only
+                beginSeriesMetadataDownload()
+            } else if mediaSources.count > 1 {
                 showVersionSheet = true
             } else if let firstSource = mediaSources.first,
                       let sourceId = firstSource.id,
@@ -91,15 +94,25 @@ final class DownloadTaskButtonViewModel: ObservableObject {
             return
         }
 
+        // Create a new item with only the selected media source
         var selected = item
         selected.mediaSources = [source]
-        downloadManager.download(task: DownloadTask(item: selected))
+
+        // Use the new download method that handles version numbering
+        downloadManager.download(item: selected, mediaSource: source)
     }
 
     func cancelCurrent() {
+        // Find the currently downloading task for this item
         if let task = downloadManager.task(for: item) {
             downloadManager.cancel(task: task)
         }
+    }
+
+    func beginSeriesMetadataDownload() {
+        // Download series metadata and images only (no media files)
+        uiState = .downloading(0.0)
+        downloadManager.download(item: item, mediaSource: nil)
     }
 
     // MARK: Private

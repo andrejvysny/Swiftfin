@@ -20,7 +20,12 @@ enum DownloadGroup: Identifiable, Hashable {
     var id: String {
         switch self {
         case let .movie(task):
-            return task.item.id ?? UUID().uuidString
+            // Include media source ID in the identifier for movies to distinguish between versions
+            let baseId = task.item.id ?? UUID().uuidString
+            if let mediaSourceId = task.item.mediaSources?.first?.id {
+                return "\(baseId)_\(mediaSourceId)"
+            }
+            return baseId
         case let .series(group):
             return group.id
         case let .standalone(task):
@@ -31,7 +36,16 @@ enum DownloadGroup: Identifiable, Hashable {
     var displayTitle: String {
         switch self {
         case let .movie(task):
-            return task.item.displayTitle
+            // Show version information for movies with multiple media sources
+            let baseTitle = task.item.displayTitle
+            if let mediaSource = task.item.mediaSources?.first {
+                // Try to get meaningful version information
+                let versionInfo = getVersionDisplayInfo(for: mediaSource)
+                if !versionInfo.isEmpty {
+                    return "\(baseTitle) (\(versionInfo))"
+                }
+            }
+            return baseTitle
         case let .series(group):
             return group.displayTitle
         case let .standalone(task):
@@ -157,6 +171,57 @@ struct EpisodeGroup: Identifiable, Hashable {
 
 // MARK: - Helper Functions
 
+/// Extracts meaningful version information from a MediaSourceInfo for display
+private func getVersionDisplayInfo(for mediaSource: MediaSourceInfo) -> String {
+    var versionParts: [String] = []
+
+    // Add container format if available
+    if let container = mediaSource.container, !container.isEmpty {
+        versionParts.append(container.uppercased())
+    }
+
+    // Add video codec if available from video streams
+    if let videoStreams = mediaSource.videoStreams,
+       let firstVideo = videoStreams.first,
+       let codec = firstVideo.codec,
+       !codec.isEmpty
+    {
+        versionParts.append(codec.uppercased())
+    }
+
+    // Add resolution information if available from video streams
+    if let videoStreams = mediaSource.videoStreams,
+       let firstVideo = videoStreams.first,
+       let width = firstVideo.width,
+       let height = firstVideo.height
+    {
+        let resolution = "\(width)x\(height)"
+        versionParts.append(resolution)
+    }
+
+    // Add bitrate information if available from video streams
+    if let videoStreams = mediaSource.videoStreams,
+       let firstVideo = videoStreams.first,
+       let bitrate = firstVideo.bitRate,
+       bitrate > 0
+    {
+        let bitrateMB = bitrate / 1_000_000
+        versionParts.append("\(bitrateMB)Mbps")
+    }
+
+    // If we have meaningful version info, return it
+    if !versionParts.isEmpty {
+        return versionParts.joined(separator: " ")
+    }
+
+    // Fallback to media source ID prefix if no other info available
+    if let mediaSourceId = mediaSource.id, !mediaSourceId.isEmpty {
+        return String(mediaSourceId.prefix(8))
+    }
+
+    return ""
+}
+
 // MARK: - Data Transformation
 
 /// Transforms a flat array of DownloadTask into hierarchical DownloadGroup structure
@@ -164,10 +229,18 @@ func transformDownloadsToHierarchy(_ downloadTasks: [DownloadTask]) -> [Download
     var seriesGroups: [String: SeriesGroup] = [:]
     var standaloneItems: [DownloadGroup] = []
 
+    // Group movie downloads by item ID to handle multiple versions
+    var movieGroups: [String: [DownloadTask]] = [:]
+
     for task in downloadTasks {
         switch task.item.type {
         case .movie:
-            standaloneItems.append(.movie(task))
+            // Group movies by their base item ID to handle multiple versions
+            let baseItemId = task.item.id ?? UUID().uuidString
+            if movieGroups[baseItemId] == nil {
+                movieGroups[baseItemId] = []
+            }
+            movieGroups[baseItemId]?.append(task)
 
         case .series:
             // Create or update series group
@@ -226,6 +299,13 @@ func transformDownloadsToHierarchy(_ downloadTasks: [DownloadTask]) -> [Download
         default:
             // Other types (audio, video, etc.) become standalone items
             standaloneItems.append(.standalone(task))
+        }
+    }
+
+    // Process movie groups - create separate DownloadGroup for each version
+    for (_, movieTasks) in movieGroups {
+        for movieTask in movieTasks {
+            standaloneItems.append(.movie(movieTask))
         }
     }
 

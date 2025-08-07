@@ -252,6 +252,109 @@ struct DownloadsView: View {
 
     // MARK: - Private Methods
 
+    /// Custom media URL resolution that handles the new version-specific file structure
+    private func getMediaURLForDownloadTask(_ downloadTask: DownloadTask) -> URL? {
+        guard let baseDownloadFolder = downloadTask.item.downloadFolder else {
+            logger.error("No download folder available for item: \(downloadTask.item.displayTitle)")
+            return nil
+        }
+
+        // Check if this is a version-specific download (has a target media source)
+        if let mediaSourceId = downloadTask.targetMediaSource?.id {
+            // New structure: check version-specific folder
+            let versionFolder = baseDownloadFolder.appendingPathComponent(mediaSourceId)
+            logger.debug("Checking version-specific folder: \(versionFolder.path)")
+
+            // Check if version-specific folder exists
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: versionFolder.path, isDirectory: &isDirectory) && isDirectory.boolValue else {
+                logger.debug("Version-specific folder does not exist: \(versionFolder.path)")
+                // Fall back to base folder
+                return getMediaURLFromBaseFolder(downloadTask, baseFolder: baseDownloadFolder)
+            }
+
+            // Look for media files in version-specific folder
+            do {
+                let contents = try FileManager.default.contentsOfDirectory(atPath: versionFolder.path)
+                logger.debug("Version-specific folder contents: \(contents)")
+
+                // Try to find media file in version-specific folder
+                if let mediaURL = findMediaFile(in: contents, baseFolder: versionFolder) {
+                    logger.debug("Found media file in version-specific folder: \(mediaURL.path)")
+                    return mediaURL
+                }
+            } catch {
+                logger.error("Error reading version-specific folder: \(error)")
+            }
+        }
+
+        // Fall back to base folder (legacy structure)
+        return getMediaURLFromBaseFolder(downloadTask, baseFolder: baseDownloadFolder)
+    }
+
+    /// Helper method to find media files in a given folder
+    private func findMediaFile(in contents: [String], baseFolder: URL) -> URL? {
+        let videoExtensions = ["mp4", "mkv", "mov", "avi", "m4v", "webm", "ogv", "wmv", "flv", "ts", "m2ts"]
+
+        // First priority: Look for legacy Media.* files (most common in existing downloads)
+        if let legacyFile = contents.first(where: { $0.starts(with: "Media.") }) {
+            let mediaURL = baseFolder.appendingPathComponent(legacyFile)
+            if FileManager.default.fileExists(atPath: mediaURL.path) {
+                logger.debug("Found legacy media file: \(legacyFile)")
+                return mediaURL
+            }
+        }
+
+        // Second priority: Look for MediaSourceInfo.id-based files (new structure)
+        // These files start with a long string (MediaSourceInfo.id) followed by extension
+        for filename in contents {
+            let lowercased = filename.lowercased()
+            // Check if this looks like a MediaSourceInfo.id-based file (long string with video extension)
+            if lowercased.count > 20 && videoExtensions.contains(where: { lowercased.hasSuffix(".\($0)") }) {
+                let mediaURL = baseFolder.appendingPathComponent(filename)
+                if FileManager.default.fileExists(atPath: mediaURL.path) {
+                    logger.debug("Found MediaSourceInfo.id-based file: \(filename)")
+                    return mediaURL
+                }
+            }
+        }
+
+        // Third priority: Look for version files (version1.mp4, version2.avi, etc.)
+        if let versionFile = contents.first(where: { $0.starts(with: "version") }) {
+            let mediaURL = baseFolder.appendingPathComponent(versionFile)
+            if FileManager.default.fileExists(atPath: mediaURL.path) {
+                logger.debug("Found version file: \(versionFile)")
+                return mediaURL
+            }
+        }
+
+        // Last priority: Look for any video files with common extensions
+        for filename in contents {
+            let lowercased = filename.lowercased()
+            if videoExtensions.contains(where: { lowercased.hasSuffix(".\($0)") }) {
+                let mediaURL = baseFolder.appendingPathComponent(filename)
+                if FileManager.default.fileExists(atPath: mediaURL.path) {
+                    logger.debug("Found video file: \(filename)")
+                    return mediaURL
+                }
+            }
+        }
+
+        return nil
+    }
+
+    /// Helper method to get media URL from base folder (legacy structure)
+    private func getMediaURLFromBaseFolder(_ downloadTask: DownloadTask, baseFolder: URL) -> URL? {
+        do {
+            let contents = try FileManager.default.contentsOfDirectory(atPath: baseFolder.path)
+            logger.debug("Base folder contents: \(contents)")
+            return findMediaFile(in: contents, baseFolder: baseFolder)
+        } catch {
+            logger.error("Error reading base folder: \(error)")
+            return nil
+        }
+    }
+
     private func loadDownloadedItems() {
         logger.info("Loading downloaded items")
         logger.debug("Network status: \(networkMonitor.isConnected)")
@@ -283,18 +386,58 @@ struct DownloadsView: View {
         let items = downloadManager.downloadedItems()
         logger.info("DownloadManager returned \(items.count) downloaded items")
 
+        // Enhanced logging for multiple version detection
+        var movieGroups: [String: [DownloadTask]] = [:]
+
         for (index, item) in items.enumerated() {
             logger
                 .debug(
                     "Item \(index): \(item.item.displayTitle) (ID: \(item.item.id ?? "nil")) - Type: \(item.item.type?.rawValue ?? "nil")"
                 )
 
-            // Check if media file exists for this item
-            if let mediaURL = item.getMediaURL() {
+            // Track movie items for version analysis
+            if item.item.type == .movie {
+                let baseId = item.item.id ?? "unknown"
+                if movieGroups[baseId] == nil {
+                    movieGroups[baseId] = []
+                }
+                movieGroups[baseId]?.append(item)
+
+                // Log media source information using new targetMediaSource
+                if let targetMediaSource = item.targetMediaSource {
+                    let videoCodec = targetMediaSource.videoStreams?.first?.codec ?? "nil"
+                    logger
+                        .debug(
+                            "  Target media source: ID=\(targetMediaSource.id ?? "nil"), Container=\(targetMediaSource.container ?? "nil"), Codec=\(videoCodec)"
+                        )
+                } else {
+                    logger.debug("  No target media source found")
+                }
+            }
+
+            // Check if media file exists for this item using custom resolution
+            if let mediaURL = getMediaURLForDownloadTask(item) {
                 let mediaExists = FileManager.default.fileExists(atPath: mediaURL.path)
                 logger.debug("  Media file exists: \(mediaExists) at \(mediaURL.path)")
+
+                // Log file size for debugging
+                do {
+                    let attributes = try FileManager.default.attributesOfItem(atPath: mediaURL.path)
+                    if let fileSize = attributes[.size] as? Int64 {
+                        logger.debug("  Media file size: \(ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file))")
+                    }
+                } catch {
+                    logger.warning("  Could not get media file attributes: \(error)")
+                }
             } else {
-                logger.warning("  No media URL found for item")
+                logger.warning("  No media URL found for item using custom resolution")
+
+                // Try the original method as fallback for debugging
+                if let originalMediaURL = item.getMediaURL() {
+                    logger.debug("  Original method found media URL: \(originalMediaURL.path)")
+                } else {
+                    logger.error("  Both custom and original methods failed to find media URL")
+                }
             }
 
             // Check if images exist
@@ -309,18 +452,45 @@ struct DownloadsView: View {
             }
         }
 
+        // Log movie version analysis
+        for (movieId, movieTasks) in movieGroups {
+            if movieTasks.count > 1 {
+                logger.info("Found \(movieTasks.count) versions for movie ID: \(movieId)")
+                for (versionIndex, task) in movieTasks.enumerated() {
+                    logger.info("  Version \(versionIndex + 1): \(task.item.displayTitle)")
+                    if let targetMediaSource = task.targetMediaSource {
+                        logger.info("    Media source ID: \(targetMediaSource.id ?? "nil")")
+                        logger.info("    Container: \(targetMediaSource.container ?? "nil")")
+                        let videoCodec = targetMediaSource.videoStreams?.first?.codec ?? "nil"
+                        logger.info("    Video codec: \(videoCodec)")
+                    }
+                }
+            }
+        }
+
         DispatchQueue.main.async {
             self.downloadedItems = items
             self.hierarchicalGroups = transformDownloadsToHierarchy(items)
             self.isLoading = false
             self.logger.info("Updated UI with \(items.count) downloaded items in \(self.hierarchicalGroups.count) groups")
+
+            // Log the final hierarchy for debugging
+            for (groupIndex, group) in self.hierarchicalGroups.enumerated() {
+                self.logger.debug("Group \(groupIndex): \(group.displayTitle) (ID: \(group.id))")
+            }
         }
     }
 
     private func playDownloadedItem(_ downloadTask: DownloadTask) {
-        let manager = DownloadVideoPlayerManager(downloadTask: downloadTask)
-
-        router.route(to: .videoPlayer(manager: manager))
+        // Verify media file exists using custom resolution before playing
+        if let mediaURL = getMediaURLForDownloadTask(downloadTask) {
+            logger.info("Playing downloaded item: \(downloadTask.item.displayTitle) from \(mediaURL.path)")
+            let manager = CustomDownloadVideoPlayerManager(downloadTask: downloadTask, mediaURL: mediaURL)
+            router.route(to: .videoPlayer(manager: manager))
+        } else {
+            logger.error("Cannot play item - no media file found: \(downloadTask.item.displayTitle)")
+            // TODO: Show user-friendly error message
+        }
     }
 
     private func deleteDownloadedItem(_ downloadTask: DownloadTask) {
@@ -503,5 +673,144 @@ struct InProgressDownloadRow: View {
         default:
             return "Unknown status"
         }
+    }
+}
+
+// MARK: - Custom Download Video Player Manager
+
+/// Custom DownloadVideoPlayerManager that uses the custom media URL resolution
+/// to handle the new version-specific file structure
+final class CustomDownloadVideoPlayerManager: VideoPlayerManager {
+
+    init(downloadTask: DownloadTask, mediaURL: URL) {
+        super.init()
+
+        logger.info("Initializing CustomDownloadVideoPlayerManager for item: \(downloadTask.item.displayTitle)")
+        logger.info("Using custom media URL: \(mediaURL.path)")
+        logger.info("Download task state: \(downloadTask.state)")
+
+        logger.info("Found playback URL: \(mediaURL)")
+        logger.info("File exists: \(FileManager.default.fileExists(atPath: mediaURL.path))")
+
+        // Validate media file
+        if !validateMediaFile(at: mediaURL) {
+            logger.error("Media file validation failed for: \(mediaURL)")
+            self.createFallbackViewModel(for: downloadTask)
+            return
+        }
+
+        // Get streams from the downloaded item
+        let videoStreams = downloadTask.item.videoStreams
+        let audioStreams = downloadTask.item.audioStreams
+        let subtitleStreams = downloadTask.item.subtitleStreams
+
+        logger.info("Video streams: \(videoStreams.count)")
+        logger.info("Audio streams: \(audioStreams.count)")
+        logger.info("Subtitle streams: \(subtitleStreams.count)")
+
+        // Use the first media source from the item if available, otherwise create empty one
+        var mediaSource = downloadTask.item.mediaSources?.first ?? MediaSourceInfo()
+
+        // Update the media source for local playback
+        mediaSource.path = mediaURL.path
+        mediaSource.isRemote = false
+        mediaSource.isSupportsDirectPlay = true
+        mediaSource.isSupportsDirectStream = true
+        mediaSource.isSupportsTranscoding = false // Disable transcoding for offline content
+
+        // Ensure media streams are populated
+        if mediaSource.mediaStreams == nil || mediaSource.mediaStreams?.isEmpty == true {
+            mediaSource.mediaStreams = videoStreams + audioStreams + subtitleStreams
+        }
+
+        // Validate stream configurations for offline playback
+        if audioStreams.isEmpty {
+            logger.warning("No audio streams found - this may cause playback issues")
+        }
+        if videoStreams.isEmpty {
+            logger.warning("No video streams found - this may cause playback issues")
+        }
+
+        // Log stream details for debugging
+        for stream in audioStreams {
+            logger
+                .debug(
+                    "Audio stream: codec=\(stream.codec ?? "unknown"), channels=\(stream.channels ?? 0), sampleRate=\(stream.sampleRate ?? 0)"
+                )
+        }
+        for stream in videoStreams {
+            logger.debug("Video stream: codec=\(stream.codec ?? "unknown"), width=\(stream.width ?? 0), height=\(stream.height ?? 0)")
+        }
+
+        logger.info("Creating VideoPlayerViewModel with URL: \(mediaURL)")
+
+        self.currentViewModel = .init(
+            playbackURL: mediaURL,
+            item: downloadTask.item,
+            mediaSource: mediaSource,
+            playSessionID: "",
+            videoStreams: videoStreams,
+            audioStreams: audioStreams,
+            subtitleStreams: subtitleStreams,
+            selectedAudioStreamIndex: -1,
+            selectedSubtitleStreamIndex: -1,
+            chapters: [],
+            playMethod: .directPlay
+        )
+    }
+
+    private func validateMediaFile(at url: URL) -> Bool {
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            logger.error("Media file does not exist: \(url.path)")
+            return false
+        }
+
+        do {
+            let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+            if let fileSize = attributes[.size] as? Int64 {
+                logger.debug("Media file size: \(ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file))")
+
+                // Check for minimum file size (1MB threshold to catch corrupted downloads)
+                if fileSize < 1024 * 1024 {
+                    logger.warning("Media file seems very small (\(fileSize) bytes) - may be corrupted")
+                    return false
+                }
+            }
+
+            // Check if file is readable
+            guard FileManager.default.isReadableFile(atPath: url.path) else {
+                logger.error("Media file is not readable: \(url.path)")
+                return false
+            }
+
+            return true
+        } catch {
+            logger.error("Error checking media file attributes: \(error)")
+            return false
+        }
+    }
+
+    private func createFallbackViewModel(for downloadTask: DownloadTask) {
+        logger.warning("Creating fallback VideoPlayerViewModel for item: \(downloadTask.item.displayTitle)")
+
+        // Create a minimal view model to prevent crashes
+        let fallbackURL = URL(fileURLWithPath: "/tmp/fallback.mp4")
+        var fallbackMediaSource = MediaSourceInfo()
+        fallbackMediaSource.path = fallbackURL.path
+        fallbackMediaSource.isRemote = false
+
+        self.currentViewModel = .init(
+            playbackURL: fallbackURL,
+            item: downloadTask.item,
+            mediaSource: fallbackMediaSource,
+            playSessionID: "",
+            videoStreams: [],
+            audioStreams: [],
+            subtitleStreams: [],
+            selectedAudioStreamIndex: -1,
+            selectedSubtitleStreamIndex: -1,
+            chapters: [],
+            playMethod: .directPlay
+        )
     }
 }

@@ -60,46 +60,63 @@ class DownloadManager: ObservableObject {
         }
     }
 
-    func download(task: DownloadTask) {
-        logger.info("Starting download for item: \(task.item.displayTitle) (ID: \(task.item.id ?? "unknown"))")
+    /// Downloads a specific media source for an item
+    func download(item: BaseItemDto, mediaSource: MediaSourceInfo? = nil) {
+        logger.info("Starting download for item: \(item.displayTitle) (ID: \(item.id ?? "unknown"))")
+
+        // Validate media source
+        let targetMediaSource: MediaSourceInfo
+        if let mediaSource = mediaSource {
+            targetMediaSource = mediaSource
+        } else if let firstMediaSource = item.mediaSources?.first {
+            targetMediaSource = firstMediaSource
+        } else {
+            logger.error("No media source available for download")
+            return
+        }
+
+        // Validate media source has an ID
+        guard let mediaSourceId = targetMediaSource.id else {
+            logger.error("Media source has no ID - cannot download")
+            return
+        }
+
+        logger.info("Target media source ID: \(mediaSourceId)")
+
+        // Check if this specific media source is already downloaded
+        if isMediaSourceDownloaded(item: item, mediaSourceId: mediaSourceId) {
+            logger.warning("Media source \(mediaSourceId) is already downloaded for item: \(item.displayTitle)")
+            return
+        }
+
+        // Check if this specific media source is currently being downloaded
+        if isMediaSourceCurrentlyDownloading(item: item, mediaSourceId: mediaSourceId) {
+            logger.warning("Media source \(mediaSourceId) is already being downloaded for item: \(item.displayTitle)")
+            return
+        }
+
+        // Create task with specific media source
+        let task = DownloadTask(item: item, mediaSource: targetMediaSource)
+
+        logger.debug("Created download task for media source: \(mediaSourceId)")
         logger.debug("Current download state: \(task.state)")
         logger.debug("Current downloads count: \(downloads.count)")
 
-        // Log existing downloads for this item
-        let existingTasks = downloads.filter { $0.item == task.item }
-        if !existingTasks.isEmpty {
-            logger.debug("Found \(existingTasks.count) existing tasks for this item:")
-            for (index, existingTask) in existingTasks.enumerated() {
-                logger.debug("  Task \(index): state=\(existingTask.state)")
-            }
-        }
-
-        // Remove any existing ready, cancelled or error tasks for this item
+        // Remove any existing ready, cancelled or error tasks for this item and media source
         downloads.removeAll {
             guard $0.item == task.item else { return false }
-            switch $0.state {
-            case .ready, .cancelled, .error:
-                logger.debug("Removing existing task in state \($0.state) for item: \(task.item.displayTitle)")
-                return true
-            default:
-                return false
-            }
-        }
+            guard let existingMediaSourceId = $0.targetMediaSource?.id else { return false }
 
-        // Don't add if already downloading or completed
-        let shouldSkip = downloads.contains(where: { existingTask in
-            guard existingTask.item == task.item else { return false }
-            switch existingTask.state {
-            case .complete, .downloading:
-                return true
-            default:
-                return false
+            if existingMediaSourceId == mediaSourceId {
+                switch $0.state {
+                case .ready, .cancelled, .error:
+                    logger.debug("Removing existing task in state \($0.state) for media source: \(mediaSourceId)")
+                    return true
+                default:
+                    return false
+                }
             }
-        })
-
-        if shouldSkip {
-            logger.warning("Skipping download - item already downloading or completed: \(task.item.displayTitle)")
-            return
+            return false
         }
 
         downloads.append(task)
@@ -149,6 +166,11 @@ class DownloadManager: ObservableObject {
         task.download()
     }
 
+    /// Legacy method for backward compatibility
+    func download(task: DownloadTask) {
+        download(item: task.item, mediaSource: task.item.mediaSources?.first)
+    }
+
     // MARK: - Download Management
 
     func task(for item: BaseItemDto) -> DownloadTask? {
@@ -185,6 +207,58 @@ class DownloadManager: ObservableObject {
         }
     }
 
+    /// Gets the download task for a specific media source of an item
+    func task(for item: BaseItemDto, mediaSourceId: String) -> DownloadTask? {
+        logger.debug("Looking for download task for item: \(item.displayTitle) with media source: \(mediaSourceId)")
+
+        // Check currently downloading tasks for this specific media source
+        if let currentlyDownloading = downloads.first(where: { task in
+            guard task.item.id == item.id else { return false }
+            return task.targetMediaSource?.id == mediaSourceId
+        }) {
+            logger.debug("Found active download task with state: \(currentlyDownloading.state)")
+            return currentlyDownloading
+        } else {
+            logger.debug("No active download task found, checking for completed downloads")
+
+            guard let baseDownloadFolder = item.downloadFolder else {
+                logger.debug("No download folder available for item")
+                return nil
+            }
+
+            // Check version-specific folder using MediaSourceInfo.id
+            let versionFolder = baseDownloadFolder.appendingPathComponent(mediaSourceId)
+            let metadataPath = versionFolder.appendingPathComponent("Metadata").appendingPathComponent("Item.json")
+
+            if FileManager.default.fileExists(atPath: metadataPath.path) {
+                logger.debug("Found version-specific download folder: \(versionFolder.path)")
+                return parseDownloadItemFromPath(metadataPath)
+            }
+
+            // Fallback to legacy location
+            var isDir: ObjCBool = true
+            guard FileManager.default.fileExists(atPath: baseDownloadFolder.path, isDirectory: &isDir) else {
+                logger.debug("Base download folder does not exist: \(baseDownloadFolder)")
+                return nil
+            }
+
+            logger.debug("Checking legacy download location")
+            let parsedTask = parseDownloadItem(with: item.id!)
+
+            if let task = parsedTask {
+                // Verify this task contains the specific media source
+                let hasMediaSource = task.targetMediaSource?.id == mediaSourceId
+                if hasMediaSource {
+                    logger.debug("Found media source in legacy download")
+                    return task
+                }
+            }
+
+            logger.debug("No download task found for media source: \(mediaSourceId)")
+            return nil
+        }
+    }
+
     /// Checks if a specific media source of an item is already downloaded
     func isMediaSourceDownloaded(item: BaseItemDto, mediaSourceId: String) -> Bool {
         logger.debug("Checking if media source \(mediaSourceId) is downloaded for item: \(item.displayTitle)")
@@ -195,9 +269,7 @@ class DownloadManager: ObservableObject {
             if case .complete = task.state { return true }
             return false
         }) {
-            let hasMediaSource = activeTask.item.mediaSources?.contains { source in
-                source.id == mediaSourceId
-            } ?? false
+            let hasMediaSource = activeTask.targetMediaSource?.id == mediaSourceId
 
             if hasMediaSource {
                 logger.debug("Found media source in active completed download")
@@ -205,22 +277,51 @@ class DownloadManager: ObservableObject {
             }
         }
 
-        // Then check persisted completed downloads
+        // Then check persisted completed downloads by looking in version-specific folders
         if let itemId = item.id,
-           let parsedTask = parseDownloadItem(with: itemId)
+           let baseDownloadFolder = item.downloadFolder
         {
-            let hasMediaSource = parsedTask.item.mediaSources?.contains { source in
-                source.id == mediaSourceId
-            } ?? false
 
-            if hasMediaSource {
-                logger.debug("Found media source in persisted download")
+            // Check if the version-specific folder exists using MediaSourceInfo.id
+            let versionFolder = baseDownloadFolder.appendingPathComponent(mediaSourceId)
+            let metadataPath = versionFolder.appendingPathComponent("Metadata").appendingPathComponent("Item.json")
+
+            if FileManager.default.fileExists(atPath: metadataPath.path) {
+                logger.debug("Found version-specific download folder: \(versionFolder.path)")
                 return true
+            }
+
+            // Also check the legacy location (for backward compatibility)
+            let legacyMetadataPath = baseDownloadFolder.appendingPathComponent("Metadata").appendingPathComponent("Item.json")
+            if FileManager.default.fileExists(atPath: legacyMetadataPath.path) {
+                if let parsedTask = parseDownloadItem(with: itemId) {
+                    let hasMediaSource = parsedTask.targetMediaSource?.id == mediaSourceId
+
+                    if hasMediaSource {
+                        logger.debug("Found media source in legacy download")
+                        return true
+                    }
+                }
             }
         }
 
         logger.debug("Media source not found in downloads")
         return false
+    }
+
+    /// Checks if a specific media source is currently being downloaded
+    private func isMediaSourceCurrentlyDownloading(item: BaseItemDto, mediaSourceId: String) -> Bool {
+        downloads.contains { task in
+            guard task.item.id == item.id else { return false }
+            guard task.targetMediaSource?.id == mediaSourceId else { return false }
+
+            switch task.state {
+            case .ready, .downloading:
+                return true
+            default:
+                return false
+            }
+        }
     }
 
     func cancel(task: DownloadTask) {
@@ -325,6 +426,31 @@ class DownloadManager: ObservableObject {
                                 }
                             }
                         } else {
+                            // Check if this is a version-specific folder (contains subdirectories with metadata)
+                            let subdirectories = try FileManager.default.contentsOfDirectory(
+                                at: item,
+                                includingPropertiesForKeys: [.isDirectoryKey],
+                                options: []
+                            )
+
+                            for subdirectory in subdirectories {
+                                let subResourceValues = try subdirectory.resourceValues(forKeys: [.isDirectoryKey])
+                                if subResourceValues.isDirectory == true {
+                                    let subMetadataPath = subdirectory.appendingPathComponent("Metadata")
+                                        .appendingPathComponent("Item.json")
+
+                                    if FileManager.default.fileExists(atPath: subMetadataPath.path) {
+                                        logger.debug("Found version-specific metadata file at: \(subMetadataPath)")
+
+                                        if let task = parseDownloadItemFromPath(subMetadataPath) {
+                                            foundTasks.append(task)
+                                            logger
+                                                .debug("Successfully parsed version-specific download task for: \(task.item.displayTitle)")
+                                        }
+                                    }
+                                }
+                            }
+
                             // Recursively search subdirectories
                             let subTasks = findDownloadedItems(in: item)
                             foundTasks.append(contentsOf: subTasks)
@@ -362,9 +488,67 @@ class DownloadManager: ObservableObject {
 
         logger.debug("Successfully decoded metadata for item: \(offlineItem.displayTitle)")
 
-        let task = DownloadTask(item: offlineItem)
+        // Determine version number by looking at the actual media files
+        let downloadFolder = metadataPath.deletingLastPathComponent().deletingLastPathComponent()
+        var versionNumber = 1
+
+        if let downloadFolderContents = try? FileManager.default.contentsOfDirectory(atPath: downloadFolder.path) {
+            // Look for version files and extract the highest version number
+            for filename in downloadFolderContents {
+                if filename.starts(with: "version") {
+                    // Extract version number from filename like "version1.mp4"
+                    let versionPart = filename.split(separator: ".").first ?? ""
+                    if let numberStr = versionPart.split(separator: "n").last,
+                       let number = Int(numberStr)
+                    {
+                        versionNumber = max(versionNumber, number)
+                    }
+                }
+            }
+            logger.debug("Determined version number from files: \(versionNumber)")
+        }
+
+        // Check if this is a version-specific download by looking at the path
+        let pathComponents = metadataPath.pathComponents
+        if pathComponents.count >= 2 {
+            // The second-to-last component should be the media source ID
+            let potentialMediaSourceId = pathComponents[pathComponents.count - 2]
+
+            // Check if this looks like a media source ID (not "Metadata")
+            if potentialMediaSourceId != "Metadata" && potentialMediaSourceId.count > 10 {
+                // This is likely a version-specific download
+                logger.debug("Detected version-specific download with media source ID: \(potentialMediaSourceId)")
+
+                // Find the corresponding media source in the item
+                if let mediaSource = offlineItem.mediaSources?.first(where: { $0.id == potentialMediaSourceId }) {
+                    logger.debug("Found matching media source for version-specific download")
+                    let task = DownloadTask(item: offlineItem, mediaSource: mediaSource, versionNumber: versionNumber)
+                    task.state = .complete
+                    logger.debug("Created version-specific download task with complete state and version \(versionNumber)")
+                    return task
+                }
+            }
+        }
+
+        // Fallback to regular download task - handle legacy downloads
+        logger.debug("Creating legacy download task")
+
+        // For legacy downloads, try to find a media source to use as targetMediaSource
+        var targetMediaSource: MediaSourceInfo? = nil
+        if let mediaSources = offlineItem.mediaSources, let firstMediaSource = mediaSources.first {
+            targetMediaSource = firstMediaSource
+            logger.debug("Using first media source as target for legacy download: \(firstMediaSource.id ?? "nil")")
+        }
+
+        let task: DownloadTask
+        if let targetMediaSource = targetMediaSource {
+            task = DownloadTask(item: offlineItem, mediaSource: targetMediaSource, versionNumber: versionNumber)
+        } else {
+            task = DownloadTask(item: offlineItem, versionNumber: versionNumber)
+        }
+
         task.state = .complete
-        logger.debug("Created download task with complete state")
+        logger.debug("Created legacy download task with complete state and version \(versionNumber)")
 
         return task
     }
@@ -374,6 +558,17 @@ class DownloadManager: ObservableObject {
 
         let itemMetadataFile = URL.downloads
             .appendingPathComponent(id)
+            .appendingPathComponent("Metadata")
+            .appendingPathComponent("Item.json")
+
+        return parseDownloadItemFromPath(itemMetadataFile)
+    }
+
+    private func parseDownloadItemFromVersionFolder(baseFolder: URL, mediaSourceId: String) -> DownloadTask? {
+        logger.debug("Parsing download item from version folder: \(mediaSourceId)")
+
+        let itemMetadataFile = baseFolder
+            .appendingPathComponent(mediaSourceId)
             .appendingPathComponent("Metadata")
             .appendingPathComponent("Item.json")
 
@@ -394,8 +589,19 @@ class DownloadManager: ObservableObject {
 
         // Clean up stored filename from UserDefaults
         if let itemId = task.item.id {
+            // Clean up legacy key
             UserDefaults.standard.removeObject(forKey: "download_\(itemId)_filename")
-            logger.debug("Cleaned up UserDefaults entry for item: \(itemId)")
+
+            // Clean up version-specific keys
+            if let mediaSource = task.targetMediaSource,
+               let mediaSourceId = mediaSource.id
+            {
+                let versionKey = "download_\(itemId)_\(mediaSourceId)_filename"
+                UserDefaults.standard.removeObject(forKey: versionKey)
+                logger.debug("Cleaned up UserDefaults entry for version: \(versionKey)")
+            }
+
+            logger.debug("Cleaned up UserDefaults entries for item: \(itemId)")
         }
 
         logger.info("Successfully deleted download for: \(task.item.displayTitle)")
@@ -419,14 +625,25 @@ class DownloadManager: ObservableObject {
             // Check if this download is related to the same base item
             if downloadedTask.item.id == item.id || downloadedTask.item.seriesID == item.id {
                 // Check if the downloaded item's media source matches
-                if let downloadedMediaSources = downloadedTask.item.mediaSources {
-                    for mediaSource in downloadedMediaSources {
-                        if mediaSource.id == mediaSourceId {
-                            logger.debug("Found downloaded media source: \(mediaSourceId)")
-                            return true
-                        }
-                    }
+                if let downloadedMediaSourceId = downloadedTask.targetMediaSource?.id,
+                   downloadedMediaSourceId == mediaSourceId
+                {
+                    logger.debug("Found downloaded media source: \(mediaSourceId)")
+                    return true
                 }
+            }
+        }
+
+        // Also check version-specific folders directly
+        if let itemId = item.id,
+           let baseDownloadFolder = item.downloadFolder
+        {
+            let versionFolder = baseDownloadFolder.appendingPathComponent(mediaSourceId)
+            let metadataPath = versionFolder.appendingPathComponent("Metadata").appendingPathComponent("Item.json")
+
+            if FileManager.default.fileExists(atPath: metadataPath.path) {
+                logger.debug("Found version-specific download folder: \(versionFolder.path)")
+                return true
             }
         }
 
@@ -443,14 +660,36 @@ class DownloadManager: ObservableObject {
         for downloadedTask in downloadedItems {
             // Check if this download is related to the same base item
             if downloadedTask.item.id == item.id || downloadedTask.item.seriesID == item.id {
-                // Collect all media source IDs from this download
-                if let mediaSources = downloadedTask.item.mediaSources {
-                    for mediaSource in mediaSources {
-                        if let id = mediaSource.id {
-                            downloadedIds.insert(id)
+                // Collect media source ID from this download
+                if let mediaSourceId = downloadedTask.targetMediaSource?.id {
+                    downloadedIds.insert(mediaSourceId)
+                }
+            }
+        }
+
+        // Also check version-specific folders directly
+        if let itemId = item.id,
+           let baseDownloadFolder = item.downloadFolder
+        {
+            do {
+                let contents = try FileManager.default.contentsOfDirectory(
+                    at: baseDownloadFolder,
+                    includingPropertiesForKeys: [.isDirectoryKey],
+                    options: []
+                )
+
+                for subdirectory in contents {
+                    let resourceValues = try subdirectory.resourceValues(forKeys: [.isDirectoryKey])
+                    if resourceValues.isDirectory == true {
+                        let metadataPath = subdirectory.appendingPathComponent("Metadata").appendingPathComponent("Item.json")
+                        if FileManager.default.fileExists(atPath: metadataPath.path) {
+                            // This is a version-specific folder, add the media source ID
+                            downloadedIds.insert(subdirectory.lastPathComponent)
                         }
                     }
                 }
+            } catch {
+                logger.debug("Error scanning version-specific folders: \(error)")
             }
         }
 

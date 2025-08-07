@@ -135,8 +135,13 @@ extension ItemView {
                 }
 
                 if enableDownload {
+                    // For series, use item's media sources directly (likely empty)
+                    // For movies/episodes, use playButtonItem's media sources
+                    let downloadMediaSources = viewModel.item.type == .series
+                        ? (viewModel.item.mediaSources ?? [])
+                        : mediaSources
 
-                    DownloadTaskButton(item: viewModel.item, mediaSources: mediaSources)
+                    DownloadTaskButton(item: viewModel.item, mediaSources: downloadMediaSources)
                         .if(equalSpacing) { view in
                             view.frame(maxWidth: .infinity)
                         }
