@@ -49,6 +49,7 @@ struct NavigationInjectionView: View {
             NavigationInjectionView(coordinator: newCoordinator) {
                 route.destination
             }
+            .environmentObject(rootCoordinator)
         }
         .fullScreenCover(
             item: $coordinator.presentedFullScreen
@@ -60,6 +61,7 @@ struct NavigationInjectionView: View {
             NavigationInjectionView(coordinator: newCoordinator) {
                 route.destination
             }
+            .environmentObject(rootCoordinator)
         }
     }
 }
