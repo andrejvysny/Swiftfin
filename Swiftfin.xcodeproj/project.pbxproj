@@ -136,6 +136,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		21B00C842E44D87100EFDE14 /* Swiftfin macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Swiftfin macOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		535870602669D21600D05A09 /* Swiftfin tvOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Swiftfin tvOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		5362E4A7267D4067000E2F71 /* GoogleCast.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = GoogleCast.framework; path = "../../Downloads/GoogleCastSDK-ios-4.6.0_dynamic/GoogleCast.framework"; sourceTree = "<group>"; };
 		5362E4AA267D40AD000E2F71 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
@@ -245,6 +246,7 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		21B00C852E44D87100EFDE14 /* Swiftfin macOS */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = "Swiftfin macOS"; sourceTree = "<group>"; };
 		E14560852DFCAE51008FF700 /* Swiftfin */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (E14561A22DFCAE51008FF700 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, E14561A32DFCAE51008FF700 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = Swiftfin; sourceTree = "<group>"; };
 		E14563272DFCAE6E008FF700 /* Shared */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (E14565D92DFCAE6E008FF700 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = Shared; sourceTree = "<group>"; };
 		E14565DD2DFCAE78008FF700 /* Scripts */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Scripts; sourceTree = "<group>"; };
@@ -254,6 +256,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		21B00C812E44D87100EFDE14 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		5358705D2669D21600D05A09 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -377,6 +386,7 @@
 				E145669F2DFCAEFD008FF700 /* Swiftfin tvOS */,
 				E14563272DFCAE6E008FF700 /* Shared */,
 				E1456FC82DFCB323008FF700 /* Translations */,
+				21B00C852E44D87100EFDE14 /* Swiftfin macOS */,
 				5377CBF2263B596A003A4E83 /* Products */,
 				53D5E3DB264B47EE00BADDC8 /* Frameworks */,
 				E14565DD2DFCAE78008FF700 /* Scripts */,
@@ -389,6 +399,7 @@
 			children = (
 				5377CBF1263B596A003A4E83 /* Swiftfin iOS.app */,
 				535870602669D21600D05A09 /* Swiftfin tvOS.app */,
+				21B00C842E44D87100EFDE14 /* Swiftfin macOS.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -454,6 +465,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		21B00C832E44D87100EFDE14 /* Swiftfin macOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 21B00C8D2E44D87200EFDE14 /* Build configuration list for PBXNativeTarget "Swiftfin macOS" */;
+			buildPhases = (
+				21B00C802E44D87100EFDE14 /* Sources */,
+				21B00C812E44D87100EFDE14 /* Frameworks */,
+				21B00C822E44D87100EFDE14 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				21B00C852E44D87100EFDE14 /* Swiftfin macOS */,
+			);
+			name = "Swiftfin macOS";
+			packageProductDependencies = (
+			);
+			productName = "Swiftfin macOS";
+			productReference = 21B00C842E44D87100EFDE14 /* Swiftfin macOS.app */;
+			productType = "com.apple.product-type.application";
+		};
 		5358705F2669D21600D05A09 /* Swiftfin tvOS */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 535870712669D21700D05A09 /* Build configuration list for PBXNativeTarget "Swiftfin tvOS" */;
@@ -585,9 +618,12 @@
 				KnownAssetTags = (
 					New,
 				);
-				LastSwiftUpdateCheck = 1250;
+				LastSwiftUpdateCheck = 1640;
 				LastUpgradeCheck = 1610;
 				TargetAttributes = {
+					21B00C832E44D87100EFDE14 = {
+						CreatedOnToolsVersion = 16.4;
+					};
 					5358705F2669D21600D05A09 = {
 						CreatedOnToolsVersion = 12.5;
 					};
@@ -681,11 +717,19 @@
 			targets = (
 				5377CBF0263B596A003A4E83 /* Swiftfin iOS */,
 				5358705F2669D21600D05A09 /* Swiftfin tvOS */,
+				21B00C832E44D87100EFDE14 /* Swiftfin macOS */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		21B00C822E44D87100EFDE14 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		5358705E2669D21600D05A09 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -822,6 +866,13 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		21B00C802E44D87100EFDE14 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		5358705C2669D21600D05A09 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -839,6 +890,67 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
+		21B00C8E2E44D87200EFDE14 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CODE_SIGN_ENTITLEMENTS = "Swiftfin macOS/Swiftfin_macOS.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.andrejvysny.Swiftfin-macOS";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		21B00C8F2E44D87200EFDE14 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CODE_SIGN_ENTITLEMENTS = "Swiftfin macOS/Swiftfin_macOS.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.andrejvysny.Swiftfin-macOS";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 		535870722669D21700D05A09 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1104,6 +1216,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		21B00C8D2E44D87200EFDE14 /* Build configuration list for PBXNativeTarget "Swiftfin macOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				21B00C8E2E44D87200EFDE14 /* Debug */,
+				21B00C8F2E44D87200EFDE14 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		535870712669D21700D05A09 /* Build configuration list for PBXNativeTarget "Swiftfin tvOS" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
