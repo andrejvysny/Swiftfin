@@ -104,22 +104,16 @@ struct VideoPlayer: View {
         .ignoresSafeArea()
         .onChange(of: isScrubbing) { _, newValue in
             guard !newValue else { return }
-            Task { @MainActor in
-                videoPlayerManager.proxy.setTime(.seconds(currentProgressHandler.scrubbedSeconds))
-            }
+            videoPlayerManager.proxy.setTime(.seconds(currentProgressHandler.scrubbedSeconds))
         }
         .onScenePhase(.active) {
             if Defaults[.VideoPlayer.Transition.playOnActive] {
-                Task { @MainActor in
-                    videoPlayerManager.proxy.play()
-                }
+                videoPlayerManager.proxy.play()
             }
         }
         .onScenePhase(.background) {
             if Defaults[.VideoPlayer.Transition.pauseOnBackground] {
-                Task { @MainActor in
-                    videoPlayerManager.proxy.pause()
-                }
+                videoPlayerManager.proxy.pause()
             }
         }
     }
