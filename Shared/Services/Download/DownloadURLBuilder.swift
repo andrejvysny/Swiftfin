@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Factory
@@ -42,43 +42,10 @@ final class DownloadURLBuilder: DownloadURLBuilding {
                 deviceId: deviceId,
                 deviceProfileId: deviceProfileId
             )
-        case .high:
+        case let .transcoded(bitrate):
             return constructTranscodingDownloadURL(
                 itemId: itemId,
-                transcodingParams: .highQuality,
-                mediaSourceId: mediaSourceId,
-                container: container,
-                allowVideoStreamCopy: allowVideoStreamCopy,
-                allowAudioStreamCopy: allowAudioStreamCopy,
-                deviceId: deviceId,
-                deviceProfileId: deviceProfileId
-            )
-        case .medium:
-            return constructTranscodingDownloadURL(
-                itemId: itemId,
-                transcodingParams: .mediumQuality,
-                mediaSourceId: mediaSourceId,
-                container: container,
-                allowVideoStreamCopy: allowVideoStreamCopy,
-                allowAudioStreamCopy: allowAudioStreamCopy,
-                deviceId: deviceId,
-                deviceProfileId: deviceProfileId
-            )
-        case .low:
-            return constructTranscodingDownloadURL(
-                itemId: itemId,
-                transcodingParams: .lowQuality,
-                mediaSourceId: mediaSourceId,
-                container: container,
-                allowVideoStreamCopy: allowVideoStreamCopy,
-                allowAudioStreamCopy: allowAudioStreamCopy,
-                deviceId: deviceId,
-                deviceProfileId: deviceProfileId
-            )
-        case let .custom(params):
-            return constructTranscodingDownloadURL(
-                itemId: itemId,
-                transcodingParams: params,
+                bitrate: bitrate,
                 mediaSourceId: mediaSourceId,
                 container: container,
                 allowVideoStreamCopy: allowVideoStreamCopy,
@@ -128,7 +95,6 @@ final class DownloadURLBuilder: DownloadURLBuilding {
         deviceId: String?,
         deviceProfileId: String?
     ) -> URL? {
-        // Input validation
         guard !itemId.isEmpty, !container.isEmpty else {
             logger.error("Invalid parameters: itemId and container cannot be empty")
             return nil
@@ -139,7 +105,6 @@ final class DownloadURLBuilder: DownloadURLBuilding {
             return nil
         }
 
-        // Construct the download request with enhanced parameters
         var queryItems: [URLQueryItem] = []
 
         if let mediaSourceId = mediaSourceId {
@@ -159,8 +124,6 @@ final class DownloadURLBuilder: DownloadURLBuilding {
             queryItems.append(URLQueryItem(name: "DeviceProfileId", value: deviceProfileId))
         }
 
-        // TODO: do more tests and make sure to always use mediaSourceID - to download correct file
-        // Build the URL path
         let path = "/Items/\(mediaSourceId ?? itemId)/Download"
 
         guard let baseURL = userSession.client.fullURL(with: path) else { return nil }
@@ -168,7 +131,6 @@ final class DownloadURLBuilder: DownloadURLBuilding {
 
         components.queryItems = queryItems
 
-        // Add API key to query if needed
         if let accessToken = userSession.client.accessToken {
             components.queryItems?.append(URLQueryItem(name: "api_key", value: accessToken))
         }
@@ -178,7 +140,7 @@ final class DownloadURLBuilder: DownloadURLBuilding {
 
     private func constructTranscodingDownloadURL(
         itemId: String,
-        transcodingParams: TranscodingParameters,
+        bitrate: PlaybackBitrate,
         mediaSourceId: String?,
         container: String,
         allowVideoStreamCopy: Bool,
@@ -192,9 +154,9 @@ final class DownloadURLBuilder: DownloadURLBuilding {
               var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
         else { return nil }
 
-        var queryItems: [URLQueryItem] = []
-        // Force transcoding
-        queryItems.append(URLQueryItem(name: "Static", value: "false"))
+        var queryItems: [URLQueryItem] = [
+            URLQueryItem(name: "Static", value: "false"),
+        ]
         if let source = mediaSourceId {
             queryItems.append(URLQueryItem(name: "MediaSourceId", value: source))
         }
@@ -202,19 +164,9 @@ final class DownloadURLBuilder: DownloadURLBuilding {
         queryItems.append(URLQueryItem(name: "AllowVideoStreamCopy", value: allowVideoStreamCopy.description))
         queryItems.append(URLQueryItem(name: "AllowAudioStreamCopy", value: allowAudioStreamCopy.description))
 
-        if let maxWidth = transcodingParams.maxWidth {
-            queryItems.append(URLQueryItem(name: "maxWidth", value: String(maxWidth)))
+        if bitrate != .auto {
+            queryItems.append(URLQueryItem(name: "videoBitRate", value: String(bitrate.rawValue)))
         }
-        if let maxHeight = transcodingParams.maxHeight {
-            queryItems.append(URLQueryItem(name: "maxHeight", value: String(maxHeight)))
-        }
-        if let vbr = transcodingParams.videoBitRate {
-            queryItems.append(URLQueryItem(name: "videoBitRate", value: String(vbr)))
-        }
-        if let abr = transcodingParams.audioBitRate {
-            queryItems.append(URLQueryItem(name: "audioBitRate", value: String(abr)))
-        }
-        queryItems.append(URLQueryItem(name: "enableAutoStreamCopy", value: transcodingParams.enableAutoStreamCopy.description))
 
         if let deviceId = deviceId {
             queryItems.append(URLQueryItem(name: "DeviceId", value: deviceId))

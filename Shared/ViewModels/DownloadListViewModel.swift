@@ -11,7 +11,7 @@ import JellyfinAPI
 import Logging
 import SwiftUI
 
-// MARK: - Presentation Models moved from View
+// MARK: - Presentation Models
 
 struct DownloadedShow: Identifiable {
     let id: String
@@ -76,11 +76,10 @@ class DownloadListViewModel: ViewModel {
     @Injected(\.downloadManager)
     private var downloadManager
 
-    // Kept for backward compatibility if referenced elsewhere
     @Published
     var items: [DownloadTask] = []
 
-    // Published state for the view
+
     @Published
     private(set) var downloadedShows: [DownloadedShow] = []
     @Published
@@ -145,7 +144,7 @@ class DownloadListViewModel: ViewModel {
         }
     }
 
-    // MARK: - Loading & mapping logic moved from View
+    // MARK: - Private
 
     private func createSeriesItemFromEpisode(_ episode: BaseItemDto) -> BaseItemDto {
         var seriesItem = BaseItemDto()

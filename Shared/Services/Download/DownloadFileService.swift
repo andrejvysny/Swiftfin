@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Files
@@ -46,7 +46,6 @@ final class DownloadFileService: DownloadFileServicing {
 
         try FileManager.default.createDirectory(at: downloadFolder, withIntermediateDirectories: true)
 
-        // Validate media response before moving
         try validateMediaFile(at: temp, response: response)
 
         let finalDestination = try createMediaFileDestination(
@@ -88,7 +87,6 @@ final class DownloadFileService: DownloadFileServicing {
     }
 
     func validateMediaFile(at url: URL, response: URLResponse?) throws {
-        // Validate HTTP status code
         if let httpResponse = response as? HTTPURLResponse {
             guard (200 ... 299).contains(httpResponse.statusCode) else {
                 logger.error("Invalid HTTP status \(httpResponse.statusCode) for media download")
@@ -96,7 +94,6 @@ final class DownloadFileService: DownloadFileServicing {
             }
         }
 
-        // Basic file size validation - ensure it's not suspiciously small (likely an error page)
         do {
             let fileAttributes = try FileManager.default.attributesOfItem(atPath: url.path)
             if let fileSize = fileAttributes[.size] as? Int64, fileSize < 1024 {
@@ -213,8 +210,6 @@ final class DownloadFileService: DownloadFileServicing {
 
         let normalized = mediaSourceId ?? itemId
 
-        // Search recursively up to depth 3 for a media file matching item/version
-        // This handles both the old structure (episode folders) and new structure (series folders)
         guard let enumerator = FileManager.default.enumerator(
             at: root,
             includingPropertiesForKeys: [.isRegularFileKey],
@@ -227,15 +222,13 @@ final class DownloadFileService: DownloadFileServicing {
                 guard values.isRegularFile == true else { continue }
                 let name = url.lastPathComponent
 
-                // Accept either the new naming scheme or legacy "Media.*"
                 if name.hasPrefix("Media.") { return true }
 
-                // New naming: [episodeId]-[versionId].ext or [itemId]-[versionId].ext
                 if name.hasPrefix(normalized) {
                     return true
                 }
 
-                // For backward compatibility, also check if file contains itemId
+                // Also check if filename contains itemId
                 if name.contains(itemId) {
                     if mediaSourceId == nil {
                         return true
@@ -248,6 +241,61 @@ final class DownloadFileService: DownloadFileServicing {
             }
         }
         return false
+    }
+
+    func mediaFileURL(for item: BaseItemDto, version: VersionInfo?) -> URL? {
+        guard let downloadFolder = item.downloadFolder else { return nil }
+
+        var searchRoots: [URL] = []
+
+        if item.type == .episode,
+           let season = item.parentIndexNumber
+        {
+            let seasonFolder = downloadFolder.appendingPathComponent("Season-\(String(format: "%02d", season))")
+            if FileManager.default.fileExists(atPath: seasonFolder.path) {
+                searchRoots.append(seasonFolder)
+            }
+        }
+
+        if searchRoots.isEmpty {
+            searchRoots.append(downloadFolder)
+        }
+
+        let candidates: [String] = [
+            version?.mediaSourceId,
+            version?.versionId,
+            item.id,
+        ].compactMap { $0 }
+
+        for root in searchRoots {
+            guard let enumerator = FileManager.default.enumerator(
+                at: root,
+                includingPropertiesForKeys: [.isRegularFileKey],
+                options: [.skipsHiddenFiles]
+            ) else { continue }
+
+            for case let url as URL in enumerator {
+                do {
+                    let values = try url.resourceValues(forKeys: [.isRegularFileKey])
+                    guard values.isRegularFile == true else { continue }
+
+                    let name = url.lastPathComponent
+                    guard !name.lowercased().contains("metadata") else { continue }
+
+                    if name.hasPrefix("Media.") {
+                        return url
+                    }
+
+                    if candidates.contains(where: { name.contains($0) }) {
+                        return url
+                    }
+                } catch {
+                    continue
+                }
+            }
+        }
+
+        return nil
     }
 
     func getDownloadedItemIds() -> [String] {
@@ -316,36 +364,27 @@ final class DownloadFileService: DownloadFileServicing {
     // MARK: - Private Helpers
 
     private func moveFileAtomically(from source: URL, to destination: URL) throws {
-        // If a file already exists at destination, replace it atomically
         if FileManager.default.fileExists(atPath: destination.path) {
             let backupURL = destination.appendingPathExtension("backup")
 
-            // Move existing file to backup location first
             try FileManager.default.moveItem(at: destination, to: backupURL)
 
             do {
-                // Move new file to final destination
                 try FileManager.default.moveItem(at: source, to: destination)
-
-                // Remove backup if successful
                 try? FileManager.default.removeItem(at: backupURL)
             } catch {
-                // Restore backup if move failed
                 try? FileManager.default.moveItem(at: backupURL, to: destination)
                 throw error
             }
         } else {
-            // Move file directly if no existing file
             try FileManager.default.moveItem(at: source, to: destination)
         }
     }
 
     private func setFileAttributes(for url: URL) throws {
-        // Set file protection, exclude from backup, and apply security attributes
         var resourceValues = URLResourceValues()
         resourceValues.isExcludedFromBackup = true
 
-        // Add file protection for sensitive media content
         do {
             var mutableURL = url
             try mutableURL.setResourceValues(resourceValues)
@@ -359,7 +398,6 @@ final class DownloadFileService: DownloadFileServicing {
     }
 
     private func createMediaFileDestination(downloadTask: DownloadTask, response: URLResponse?, downloadFolder: URL) throws -> URL {
-        // Determine file extension from response
         let fileExtension: String
         if let httpResponse = response as? HTTPURLResponse,
            let contentType = httpResponse.mimeType
@@ -371,12 +409,10 @@ final class DownloadFileService: DownloadFileServicing {
             fileExtension = ".\(downloadTask.container)"
         }
 
-        // Create versioned filename based on file structure specification
         if downloadTask.item.type == .episode,
            let season = downloadTask.season,
            let episodeId = downloadTask.episodeID
         {
-            // For episodes: Downloads/[seriesId]/Season-[XX]/[episodeId]-[versionId].ext
             let seasonFolder = downloadFolder.appendingPathComponent("Season-\(String(format: "%02d", season))")
             try FileManager.default.createDirectory(at: seasonFolder, withIntermediateDirectories: true)
 
@@ -384,7 +420,6 @@ final class DownloadFileService: DownloadFileServicing {
             let filename = "\(episodeId)\(versionSuffix)\(fileExtension)"
             return seasonFolder.appendingPathComponent(filename)
         } else {
-            // For movies: Downloads/[itemId]/[itemId]-[versionId].ext
             let versionSuffix = downloadTask.versionId.map { "-\($0)" } ?? ""
             let filename = "\(downloadTask.item.id!)\(versionSuffix)\(fileExtension)"
             return downloadFolder.appendingPathComponent(filename)
@@ -398,17 +433,13 @@ final class DownloadFileService: DownloadFileServicing {
         jobType: DownloadJobType,
         context: ImageDownloadContext
     ) throws -> URL {
-        // Determine file extension
         let imageExtension = (response as? HTTPURLResponse)?.mimeSubtype ?? "jpeg"
-
-        // Create context-aware filename
         let imageTypePrefix = jobType == .backdropImage ? "Backdrop" : "Primary"
         let filename: String
         let imagesFolder: URL
 
         switch context {
         case let .episode(id):
-            // Episode images go to season Images folder
             guard let season = downloadTask.season else {
                 throw NSError(
                     domain: "DownloadFileService",
@@ -420,7 +451,6 @@ final class DownloadFileService: DownloadFileServicing {
             imagesFolder = seasonFolder.appendingPathComponent("Images")
             filename = "Episode-\(id)-\(imageTypePrefix).\(imageExtension)"
         case let .season(id):
-            // Season images go to season Images folder
             guard let season = downloadTask.season else {
                 throw NSError(
                     domain: "DownloadFileService",
@@ -432,11 +462,9 @@ final class DownloadFileService: DownloadFileServicing {
             imagesFolder = seasonFolder.appendingPathComponent("Images")
             filename = "Season-\(id)-\(imageTypePrefix).\(imageExtension)"
         case let .series(id):
-            // Series images go to show root Images folder
             imagesFolder = downloadFolder.appendingPathComponent("Images")
             filename = "Series-\(id)-\(imageTypePrefix).\(imageExtension)"
         case .movie:
-            // Movie images go to movie root Images folder
             imagesFolder = downloadFolder.appendingPathComponent("Images")
             filename = "\(imageTypePrefix).\(imageExtension)"
         }

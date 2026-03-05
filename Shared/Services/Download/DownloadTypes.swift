@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Foundation
@@ -11,17 +11,12 @@ import JellyfinAPI
 
 // MARK: - Shared Data Structures
 
-/// Represents the metadata for a downloaded item, including version information
 struct DownloadMetadata: Codable {
     let itemId: String
     let itemType: String?
     let displayTitle: String
-    // Full item payload merged into metadata.json; optional for backward compatibility
     var item: BaseItemDto?
-    // Optional map of per-episode metadata for season-level metadata files.
-    // Keyed by episodeId so individual episode details can be restored when listing.
-    // Backward compatible: absent in existing metadata files.
-    var episodes: [String: BaseItemDto]? // episodeId -> BaseItemDto
+    var episodes: [String: BaseItemDto]?
     var versions: [VersionInfo]
 
     init(
@@ -41,14 +36,11 @@ struct DownloadMetadata: Codable {
     }
 }
 
-/// Information about a specific version of a downloaded item
 struct VersionInfo: Codable {
     let versionId: String
     let container: String
     let isStatic: Bool
     let mediaSourceId: String?
-    // Optional explicit episode id for season-level metadata entries representing episodes
-    // Backward compatible: may be nil for movies or legacy metadata
     let episodeId: String?
     let downloadDate: String
     let taskId: String
@@ -72,6 +64,25 @@ struct VersionInfo: Codable {
     }
 }
 
+struct DownloadPlaybackInfo {
+    let item: BaseItemDto
+    let mediaSource: MediaSourceInfo
+    let version: VersionInfo
+    let fileURL: URL
+
+    var defaultAudioStreamIndex: Int {
+        mediaSource.defaultAudioStreamIndex
+            ?? mediaSource.audioStreams?.first?.index
+            ?? -1
+    }
+
+    var defaultSubtitleStreamIndex: Int {
+        mediaSource.defaultSubtitleStreamIndex
+            ?? mediaSource.subtitleStreams?.first?.index
+            ?? -1
+    }
+}
+
 // MARK: - Download Job Types
 
 enum DownloadJobType: Hashable, Equatable {
@@ -89,55 +100,10 @@ enum ImageDownloadContext: Hashable, Equatable {
     case movie(id: String)
 }
 
+/// Download quality selection reusing the existing `PlaybackBitrate` for transcoding.
 enum DownloadQuality: Hashable, Equatable {
     case original
-    case high // 1080p, ~4 Mbps
-    case medium // 720p, ~2 Mbps
-    case low // 480p, ~1 Mbps
-    case custom(TranscodingParameters)
-}
-
-struct TranscodingParameters: Hashable, Equatable {
-    let maxWidth: Int?
-    let maxHeight: Int?
-    let videoBitRate: Int?
-    let audioBitRate: Int?
-    let enableAutoStreamCopy: Bool
-
-    init(
-        maxWidth: Int? = nil,
-        maxHeight: Int? = nil,
-        videoBitRate: Int? = nil,
-        audioBitRate: Int? = nil,
-        enableAutoStreamCopy: Bool = true
-    ) {
-        self.maxWidth = maxWidth
-        self.maxHeight = maxHeight
-        self.videoBitRate = videoBitRate
-        self.audioBitRate = audioBitRate
-        self.enableAutoStreamCopy = enableAutoStreamCopy
-    }
-
-    static let highQuality = TranscodingParameters(
-        maxWidth: 1920,
-        maxHeight: 1080,
-        videoBitRate: 4_000_000,
-        audioBitRate: 128_000
-    )
-
-    static let mediumQuality = TranscodingParameters(
-        maxWidth: 1280,
-        maxHeight: 720,
-        videoBitRate: 2_000_000,
-        audioBitRate: 128_000
-    )
-
-    static let lowQuality = TranscodingParameters(
-        maxWidth: 854,
-        maxHeight: 480,
-        videoBitRate: 1_000_000,
-        audioBitRate: 96000
-    )
+    case transcoded(PlaybackBitrate)
 }
 
 struct DownloadJob {
@@ -190,6 +156,7 @@ protocol DownloadFileServicing {
     func getTotalDownloadSize() -> Int64?
     func getDownloadSize(itemId: String) -> Int64?
     func isItemDownloaded(itemId: String) -> Bool
+    func mediaFileURL(for item: BaseItemDto, version: VersionInfo?) -> URL?
 }
 
 protocol DownloadURLBuilding {
@@ -210,13 +177,10 @@ protocol DownloadURLBuilding {
 
 protocol DownloadMetadataManaging {
     func readMetadata(itemId: String) -> DownloadMetadata?
+    func readSeasonMetadata(seriesId: String, seasonNumber: Int) -> DownloadMetadata?
     func writeMetadata(for task: DownloadTask) throws
     func getDownloadedVersions(for itemId: String) -> [VersionInfo]
     func parseDownloadItem(with id: String) -> DownloadTask?
-
-    // Debug methods
-    func debugListDownloadedItems()
-    func debugCheckSpecificVersion(itemId: String, mediaSourceId: String?)
 }
 
 protocol DownloadImageManaging {

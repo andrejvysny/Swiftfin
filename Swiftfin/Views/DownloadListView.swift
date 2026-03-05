@@ -11,8 +11,6 @@ import JellyfinAPI
 import Logging
 import SwiftUI
 
-// Data models moved into DownloadListViewModel
-
 struct DownloadListView: View {
 
     // MARK: - Properties
@@ -26,8 +24,6 @@ struct DownloadListView: View {
 
     @StateObject
     private var viewModel = DownloadListViewModel()
-
-    // ViewModel holds data; view manages UI-only state
 
     @State
     private var showingDeleteAlert = false
@@ -222,8 +218,6 @@ struct DownloadListView: View {
 
     // MARK: - Private Methods
 
-    // Data logic moved into ViewModel
-
     private func deleteDownloadedShow(_ show: DownloadedShow) {
         logger.info("User requested to delete show: \(show.displayTitle)")
         showToDelete = show
@@ -276,7 +270,46 @@ struct DownloadListView: View {
     }
 
     private func playMovieVersion(_ downloadedVersion: DownloadedVersion) {
-        logger.warning("Player will be implemented later")
+        logger.info("Playing downloaded movie version: \(downloadedVersion.displayName)")
+
+        guard let mediaSource = resolveMediaSource(for: downloadedVersion.item, using: downloadedVersion.versionInfo) else {
+            logger.error("Unable to resolve media source for downloaded movie: \(downloadedVersion.item.displayTitle)")
+            router.route(to: .item(item: downloadedVersion.item))
+            return
+        }
+
+        router.route(
+            to: .videoPlayer(
+                manager: AutoVideoPlayerManager(
+                    item: downloadedVersion.item,
+                    mediaSource: mediaSource
+                )
+            )
+        )
+    }
+
+    private func resolveMediaSource(for item: BaseItemDto, using versionInfo: VersionInfo?) -> MediaSourceInfo? {
+        guard let mediaSources = item.mediaSources, !mediaSources.isEmpty else { return nil }
+
+        if let versionId = versionInfo?.versionId,
+           let match = mediaSources.first(where: { $0.id == versionId })
+        {
+            return match
+        }
+
+        if let mediaSourceId = versionInfo?.mediaSourceId,
+           let match = mediaSources.first(where: { $0.id == mediaSourceId })
+        {
+            return match
+        }
+
+        if let itemId = item.id,
+           let match = mediaSources.first(where: { $0.id == itemId })
+        {
+            return match
+        }
+
+        return mediaSources.first
     }
 }
 

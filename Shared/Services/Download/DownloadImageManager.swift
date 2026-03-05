@@ -3,9 +3,10 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
+import Factory
 import Foundation
 import JellyfinAPI
 import Logging
@@ -27,7 +28,6 @@ final class DownloadImageManager: DownloadImageManaging {
         let group = DispatchGroup()
         var errors: [Error] = []
 
-        // Download episode's own images
         if let backdropURL = urlBuilder.imageURL(for: task.item, type: .backdropImage),
            let itemID = task.item.id
         {
@@ -79,34 +79,31 @@ final class DownloadImageManager: DownloadImageManaging {
             }
         }
 
-        // If the item is an episode, also download show and series images
         if task.item.type == .episode {
-            // Download season's primary image (parent)
-            if let seasonPrimaryURL = task.item.seasonImageURL(.primary), seasonPrimaryURL != urlBuilder.imageURL(
-                for: task.item,
-                type: .primaryImage
-            ) {
-                let seasonContext: ImageDownloadContext = {
-                    if let seasonID = task.item.seasonID {
-                        return .season(id: seasonID)
-                    } else {
-                        return .episode(id: task.item.id ?? "")
+            // Download season's primary image using seasonID
+            if let seasonID = task.item.seasonID,
+               let client = Container.shared.currentUserSession()?.client
+            {
+                let seasonContext: ImageDownloadContext = .season(id: seasonID)
+                let request = Paths.getItemImage(
+                    itemID: seasonID,
+                    imageType: ImageType.primary.rawValue,
+                    parameters: Paths.GetItemImageParameters(maxWidth: 300)
+                )
+                if let seasonPrimaryURL = client.fullURL(with: request) {
+                    group.enter()
+                    downloadSingleImage(url: seasonPrimaryURL, for: task, type: .primaryImage, context: seasonContext) { result in
+                        switch result {
+                        case .success:
+                            self.logger.trace("Successfully downloaded season primary image for: \(task.item.displayTitle)")
+                        case let .failure(error):
+                            self.logger.warning("Failed to download season primary image: \(error.localizedDescription)")
+                            errors.append(error)
+                        }
+                        group.leave()
                     }
-                }()
-
-                group.enter()
-                downloadSingleImage(url: seasonPrimaryURL, for: task, type: .primaryImage, context: seasonContext) { result in
-                    switch result {
-                    case .success:
-                        self.logger.trace("Successfully downloaded season primary image for: \(task.item.displayTitle)")
-                    case let .failure(error):
-                        self.logger.warning("Failed to download season primary image: \(error.localizedDescription)")
-                        errors.append(error)
-                    }
-                    group.leave()
                 }
             }
-            // Download series images (if available)
             if let seriesBackdropURL = task.item.seriesImageURL(.backdrop),
                let seriesID = task.item.seriesID
             {
@@ -149,16 +146,8 @@ final class DownloadImageManager: DownloadImageManaging {
             }
         }
 
-        // Complete when all images are downloaded (or failed)
         group.notify(queue: .global(qos: .utility)) {
-            if errors.isEmpty {
-                completion(.success(()))
-            } else {
-                // For images, we don't fail the entire download if images fail
-                // We just log the errors and continue
-                self.logger.info("Some image downloads failed, but continuing with main download")
-                completion(.success(()))
-            }
+            completion(.success(()))
         }
     }
 
@@ -191,7 +180,6 @@ final class DownloadImageManager: DownloadImageManaging {
             }
 
             do {
-                // Move the image file to its final destination
                 guard let downloadFolder = task.item.downloadFolder else {
                     throw NSError(
                         domain: "DownloadImageManager",

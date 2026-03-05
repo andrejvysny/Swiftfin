@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Factory
@@ -11,7 +11,6 @@ import Foundation
 import JellyfinAPI
 import Logging
 
-/// Orchestrates download services to provide a unified download management interface
 final class DownloadManager: NSObject, ObservableObject {
 
     private let logger = Logger.swiftfin()
@@ -45,16 +44,13 @@ final class DownloadManager: NSObject, ObservableObject {
         self.urlBuilder = urlBuilder
         self.fileService = fileService
 
-        // Set up dependencies for metadata and image managers
         self.metadataManager = metadataManager ?? DownloadMetadataManager(fileService: fileService)
         self.imageManager = imageManager ?? DownloadImageManager(urlBuilder: urlBuilder, fileService: fileService)
 
         super.init()
 
-        // Set self as delegate for session events
         self.sessionManager.delegate = self
 
-        // Initialize file system
         do {
             try fileService.ensureDownloadDirectory()
         } catch {
@@ -96,7 +92,6 @@ final class DownloadManager: NSObject, ObservableObject {
         downloads.append(task)
         updateTaskState(taskID: task.taskID, state: .ready)
 
-        // Start the download using the new architecture
         Task {
             await startDownloadForTask(task)
         }
@@ -104,10 +99,8 @@ final class DownloadManager: NSObject, ObservableObject {
 
     private func startDownloadForTask(_ downloadTask: DownloadTask) async {
         do {
-            // Check available disk space first
             try fileService.checkAvailableDiskSpace()
 
-            // Construct download URL
             guard let downloadURL = urlBuilder.mediaURL(
                 itemId: downloadTask.item.id!,
                 quality: downloadTask.quality,
@@ -124,22 +117,14 @@ final class DownloadManager: NSObject, ObservableObject {
                 return
             }
 
-            // Initialize completion tracking
             completedJobsByTask[downloadTask.taskID] = Set<DownloadJobType>()
-
-            // Start all downloads (media, images, metadata)
             try await startAllDownloads(for: downloadTask, with: downloadURL)
-
-            logger.trace("Started all downloads for item: \(downloadTask.item.id!)")
-
         } catch {
             logger.error("Failed to start download for item: \(downloadTask.item.id!) - \(error.localizedDescription)")
-
             updateTaskState(taskID: downloadTask.taskID, state: .error(error))
         }
     }
 
-    /// Starts downloading a media file from Jellyfin.
     func startDownload(
         itemId: String,
         quality: DownloadQuality = .original,
@@ -151,7 +136,6 @@ final class DownloadManager: NSObject, ObservableObject {
         deviceId: String? = nil,
         deviceProfileId: String? = nil
     ) -> UUID {
-        // Prevent duplicate concurrent downloads for the same item/version
         if let existing = downloads.first(where: { task in
             guard task.item.id == itemId && task.mediaSourceId == mediaSourceId else { return false }
             let currentState = taskStates[task.taskID] ?? .ready
@@ -172,13 +156,10 @@ final class DownloadManager: NSObject, ObservableObject {
         let taskID = UUID()
         logger.trace("Starting download for item: \(itemId) with task ID: \(taskID)")
 
-        // Start async task to fetch item and begin download
         Task {
             do {
-                // Check available disk space first
                 try fileService.checkAvailableDiskSpace()
 
-                // Fetch item details from Jellyfin API
                 guard let userSession = Container.shared.currentUserSession() else {
                     logger.error("No user session available for download")
                     return
@@ -188,12 +169,11 @@ final class DownloadManager: NSObject, ObservableObject {
                 let response = try await userSession.client.send(request)
                 let item = response.value
 
-                // Create DownloadTask
                 let downloadTask = DownloadTask(
                     item: item,
                     taskID: taskID,
                     mediaSourceId: mediaSourceId,
-                    versionId: mediaSourceId, // Keep for backward compatibility
+                    versionId: mediaSourceId,
                     container: container,
                     quality: quality,
                     isStatic: isStatic,
@@ -203,7 +183,6 @@ final class DownloadManager: NSObject, ObservableObject {
                     deviceProfileId: deviceProfileId
                 )
 
-                // Construct download URL
                 guard let downloadURL = urlBuilder.mediaURL(
                     itemId: itemId,
                     quality: quality,
@@ -219,24 +198,16 @@ final class DownloadManager: NSObject, ObservableObject {
                     return
                 }
 
-                // Add to downloads array on main thread
                 await MainActor.run {
                     downloads.append(downloadTask)
                     self.taskStates[taskID] = .ready
                 }
 
-                // Initialize completion tracking
                 completedJobsByTask[taskID] = Set<DownloadJobType>()
-
-                // Start all downloads (media, images, metadata)
                 try await startAllDownloads(for: downloadTask, with: downloadURL)
-
-                logger.trace("Started all downloads for item: \(itemId)")
-
             } catch {
                 logger.error("Failed to start download for item: \(itemId) - \(error.localizedDescription)")
 
-                // Clean up on failure
                 await MainActor.run {
                     if let index = self.downloads.firstIndex(where: { $0.taskID == taskID }) {
                         self.taskStates[taskID] = .error(error)
@@ -253,7 +224,6 @@ final class DownloadManager: NSObject, ObservableObject {
 
         sessionManager.pause(taskID: taskID)
 
-        // Update task state
         updateTaskState(taskID: taskID, state: .paused)
     }
 
@@ -266,7 +236,7 @@ final class DownloadManager: NSObject, ObservableObject {
 
                 updateTaskState(taskID: taskID, state: .downloading(0.0))
             } catch {
-                // If resume fails, restart the download
+                // Resume failed, restart
                 logger.info("Resume failed, restarting download: \(error.localizedDescription)")
                 await restartDownload(for: task)
             }
@@ -283,7 +253,6 @@ final class DownloadManager: NSObject, ObservableObject {
 
         sessionManager.cancel(taskID: taskID)
 
-        // Clean up completion tracking
         completedJobsByTask.removeValue(forKey: taskID)
 
         if removeFile {
@@ -306,7 +275,6 @@ final class DownloadManager: NSObject, ObservableObject {
     func deleteAllDownloadedMedia() {
         logger.info("Deleting all downloaded media")
 
-        // Cancel any active downloads first
         let activeTasks = downloads.map(\.taskID)
         for taskID in activeTasks {
             cancelDownload(taskID: taskID, removeFile: true)
@@ -319,13 +287,11 @@ final class DownloadManager: NSObject, ObservableObject {
             logger.error("Failed to delete all downloads: \(error.localizedDescription)")
         }
 
-        // Clear in-memory state
         reset()
     }
 
     @discardableResult
     func deleteDownloadedMedia(itemId: String) -> Bool {
-        // First check if there's an active download for this item
         if let activeTask = downloads.first(where: { $0.item.id == itemId }) {
             cancelDownload(taskID: activeTask.taskID, removeFile: true)
             return true
@@ -379,7 +345,6 @@ final class DownloadManager: NSObject, ObservableObject {
         let downloadedVersions = metadataManager.getDownloadedVersions(for: itemId)
         logger.debug("Found \(downloadedVersions.count) downloaded versions for itemId: \(itemId)")
 
-        // Normalize the mediaSourceId - nil should be treated as itemId
         let targetMediaSourceId = mediaSourceId ?? itemId
         logger.debug("Target mediaSourceId (normalized): \(targetMediaSourceId)")
 
@@ -389,7 +354,6 @@ final class DownloadManager: NSObject, ObservableObject {
             return versionMediaSourceId == targetMediaSourceId
         }
 
-        // Also ensure the media file for this version exists on disk
         let hasMedia = fileService.hasMediaFile(for: itemId, mediaSourceId: mediaSourceId)
 
         let isDownloaded = hasMetadataVersion && hasMedia
@@ -411,6 +375,19 @@ final class DownloadManager: NSObject, ObservableObject {
         metadataManager.getDownloadedVersions(for: itemId)
     }
 
+    func playbackInfo(for item: BaseItemDto, mediaSourceId: String?) -> DownloadPlaybackInfo? {
+        guard let itemType = item.type else { return nil }
+
+        switch itemType {
+        case .movie:
+            return resolveMoviePlaybackInfo(for: item, mediaSourceId: mediaSourceId)
+        case .episode:
+            return resolveEpisodePlaybackInfo(for: item, mediaSourceId: mediaSourceId)
+        default:
+            return nil
+        }
+    }
+
     // MARK: - File Operations for Tasks
 
     func getImageURL(for task: DownloadTask, name: String) -> URL? {
@@ -427,22 +404,17 @@ final class DownloadManager: NSObject, ObservableObject {
     }
 
     func getMediaURL(for task: DownloadTask) -> URL? {
-        do {
-            guard let downloadFolder = task.item.downloadFolder else { return nil }
-            let contents = try FileManager.default.contentsOfDirectory(atPath: downloadFolder.path)
-
-            guard let mediaFilename = contents.first(where: { $0.starts(with: "Media") }) else { return nil }
-
-            return downloadFolder.appendingPathComponent(mediaFilename)
-        } catch {
-            return nil
+        if let info = playbackInfo(for: task.item, mediaSourceId: task.mediaSourceId) {
+            return info.fileURL
         }
+
+        return fileService.mediaFileURL(for: task.item, version: nil)
     }
 
     // MARK: - Legacy/Compatibility Methods
 
     func task(for item: BaseItemDto) -> DownloadTask? {
-        // For backward compatibility, return any task for this item
+        // Return active or persisted task for this item
         if let currentlyDownloading = downloads.first(where: { $0.item.id == item.id }) {
             return currentlyDownloading
         } else {
@@ -477,34 +449,163 @@ final class DownloadManager: NSObject, ObservableObject {
         }
     }
 
-    // MARK: - Debug Methods (Delegated)
-
-    func debugListDownloadedItems() {
-        metadataManager.debugListDownloadedItems()
-    }
-
-    func debugCheckSpecificVersion(itemId: String, mediaSourceId: String?) {
-        metadataManager.debugCheckSpecificVersion(itemId: itemId, mediaSourceId: mediaSourceId)
-    }
-
     // MARK: - Private Helpers
 
+    private func resolveMoviePlaybackInfo(for item: BaseItemDto, mediaSourceId: String?) -> DownloadPlaybackInfo? {
+        guard let itemId = item.id else { return nil }
+
+        guard fileService.isItemDownloaded(itemId: itemId) else {
+            logger.debug("Movie not downloaded for itemId: \(itemId)")
+            return nil
+        }
+
+        guard let mediaSource = resolveMediaSource(for: item, requestedMediaSourceId: mediaSourceId) else {
+            logger.warning("Unable to resolve media source for movie: \(itemId)")
+            return nil
+        }
+
+        let version = selectVersion(for: item, mediaSourceId: mediaSourceId)
+            ?? fallbackVersion(for: item, mediaSource: mediaSource, requestedMediaSourceId: mediaSourceId)
+
+        guard let fileURL = fileService.mediaFileURL(for: item, version: version) else {
+            logger.warning("Unable to locate media file for movie: \(itemId)")
+            return nil
+        }
+
+        return DownloadPlaybackInfo(item: item, mediaSource: mediaSource, version: version, fileURL: fileURL)
+    }
+
+    private func resolveEpisodePlaybackInfo(for item: BaseItemDto, mediaSourceId: String?) -> DownloadPlaybackInfo? {
+        guard let episodeId = item.id, let seriesId = item.seriesID else { return nil }
+
+        guard fileService.isItemDownloaded(itemId: seriesId) else {
+            logger.debug("Series not downloaded for episode: \(episodeId)")
+            return nil
+        }
+
+        guard let mediaSource = resolveMediaSource(for: item, requestedMediaSourceId: mediaSourceId) else {
+            logger.warning("Unable to resolve media source for episode: \(episodeId)")
+            return nil
+        }
+
+        let version = selectEpisodeVersion(for: item, mediaSourceId: mediaSourceId)
+            ?? fallbackVersion(for: item, mediaSource: mediaSource, requestedMediaSourceId: mediaSourceId)
+
+        guard let fileURL = fileService.mediaFileURL(for: item, version: version) else {
+            logger.warning("Unable to locate media file for episode: \(episodeId)")
+            return nil
+        }
+
+        return DownloadPlaybackInfo(item: item, mediaSource: mediaSource, version: version, fileURL: fileURL)
+    }
+
+    private func selectVersion(for item: BaseItemDto, mediaSourceId: String?) -> VersionInfo? {
+        guard let itemId = item.id else { return nil }
+        let versions = metadataManager.getDownloadedVersions(for: itemId)
+        return selectVersion(from: versions, for: item, mediaSourceId: mediaSourceId)
+    }
+
+    private func selectEpisodeVersion(for item: BaseItemDto, mediaSourceId: String?) -> VersionInfo? {
+        guard let seriesId = item.seriesID else { return nil }
+        let versions = metadataManager.getDownloadedVersions(for: seriesId)
+        return selectVersion(from: versions, for: item, mediaSourceId: mediaSourceId)
+    }
+
+    private func selectVersion(from versions: [VersionInfo], for item: BaseItemDto, mediaSourceId: String?) -> VersionInfo? {
+        guard !versions.isEmpty else { return nil }
+
+        let targets = targetIdentifiers(for: item, requestedMediaSourceId: mediaSourceId)
+
+        if let match = versions.first(where: { versionMatches($0, targets: targets) }) {
+            return match
+        }
+
+        if let itemId = item.id,
+           let fallbackMatch = versions.first(where: { versionMatches($0, targets: [itemId]) })
+        {
+            return fallbackMatch
+        }
+
+        return versions.first
+    }
+
+    private func resolveMediaSource(for item: BaseItemDto, requestedMediaSourceId: String?) -> MediaSourceInfo? {
+        guard let mediaSources = item.mediaSources, !mediaSources.isEmpty else { return nil }
+
+        if let requestedMediaSourceId,
+           let match = mediaSources.first(where: { $0.id == requestedMediaSourceId })
+        {
+            return match
+        }
+
+        if let itemId = item.id,
+           let match = mediaSources.first(where: { $0.id == itemId })
+        {
+            return match
+        }
+
+        return mediaSources.first
+    }
+
+    private func fallbackVersion(for item: BaseItemDto, mediaSource: MediaSourceInfo, requestedMediaSourceId: String?) -> VersionInfo {
+        let fallbackId = requestedMediaSourceId
+            ?? mediaSource.id
+            ?? item.id
+            ?? UUID().uuidString
+
+        let container = mediaSource.container
+            ?? item.mediaSources?.first?.container
+            ?? "mp4"
+
+        return VersionInfo(
+            versionId: fallbackId,
+            container: container,
+            isStatic: true,
+            mediaSourceId: requestedMediaSourceId ?? mediaSource.id ?? item.id,
+            episodeId: item.type == .episode ? item.id : nil,
+            downloadDate: "",
+            taskId: UUID().uuidString
+        )
+    }
+
+    private func targetIdentifiers(for item: BaseItemDto, requestedMediaSourceId: String?) -> [String] {
+        var identifiers: [String] = []
+
+        if let requestedMediaSourceId {
+            identifiers.append(requestedMediaSourceId)
+        }
+
+        if let itemId = item.id {
+            identifiers.append(itemId)
+        }
+
+        if let mediaSources = item.mediaSources {
+            identifiers.append(contentsOf: mediaSources.compactMap(\.id))
+        }
+
+        return Array(Set(identifiers))
+    }
+
+    private func versionMatches(_ version: VersionInfo, targets: [String]) -> Bool {
+        for target in targets {
+            if let mediaSourceId = version.mediaSourceId, mediaSourceId == target { return true }
+            if version.versionId == target { return true }
+            if let episodeId = version.episodeId, episodeId == target { return true }
+        }
+        return false
+    }
+
     private func startAllDownloads(for downloadTask: DownloadTask, with mediaURL: URL) async throws {
-        // Ensure the root download folder exists before any work
         if let downloadFolder = downloadTask.item.downloadFolder {
             try FileManager.default.createDirectory(at: downloadFolder, withIntermediateDirectories: true)
         }
 
-        // Save metadata first so presence checks work early
         try metadataManager.writeMetadata(for: downloadTask)
         markJobCompleted(taskID: downloadTask.taskID, jobType: .metadata)
 
-        // Start media download
         try await sessionManager.start(url: mediaURL, taskID: downloadTask.taskID, jobType: .media)
-
         updateTaskState(taskID: downloadTask.taskID, state: .downloading(0.0))
 
-        // Start image downloads (non-blocking)
         imageManager.downloadImages(for: downloadTask) { result in
             switch result {
             case .success:
@@ -514,11 +615,10 @@ final class DownloadManager: NSObject, ObservableObject {
             }
         }
 
-        // Add a safety timeout to ensure downloads complete even if images hang
+        // Safety timeout in case image downloads hang
         Task {
             try? await Task.sleep(nanoseconds: 60_000_000_000) // 60 seconds
 
-            // Check if download is still pending and complete it if essential parts are done
             if let currentState = taskStates[downloadTask.taskID],
                case .downloading = currentState,
                isTaskFullyCompleted(taskID: downloadTask.taskID)
@@ -585,7 +685,6 @@ extension DownloadManager: DownloadSessionDelegate {
 
         let swiftfinDownloadTask = downloads[downloadTaskIndex]
 
-        // Move file to final destination
         do {
             switch downloadJob.type {
             case .media:
@@ -596,7 +695,6 @@ extension DownloadManager: DownloadSessionDelegate {
                     response: response
                 )
             case .backdropImage, .primaryImage:
-                // Use appropriate context based on item type
                 let context: ImageDownloadContext
                 switch swiftfinDownloadTask.item.type {
                 case .movie:
@@ -604,7 +702,6 @@ extension DownloadManager: DownloadSessionDelegate {
                 case .episode:
                     context = .episode(id: swiftfinDownloadTask.item.id ?? "")
                 default:
-                    // Default to episode context for unknown types
                     context = .episode(id: swiftfinDownloadTask.item.id ?? "")
                 }
 
@@ -617,17 +714,12 @@ extension DownloadManager: DownloadSessionDelegate {
                     context: context
                 )
             case .metadata:
-                // Metadata is handled separately
                 break
             case .subtitle:
-                // TODO: Handle subtitle files
                 break
             }
 
-            // Track completion
             markJobCompleted(taskID: downloadJob.taskID, jobType: downloadJob.type)
-
-            // Check completion status - complete when essential downloads are done
             if isTaskFullyCompleted(taskID: downloadJob.taskID) {
                 updateTaskState(taskID: downloadJob.taskID, state: .complete)
                 logger.trace("Essential downloads completed for: \(swiftfinDownloadTask.item.displayTitle)")
@@ -639,7 +731,6 @@ extension DownloadManager: DownloadSessionDelegate {
             updateTaskState(taskID: downloadJob.taskID, state: .error(error))
         }
 
-        // Clean up active job
         sessionManager.removeDownloadJob(for: taskIdentifier)
     }
 
@@ -650,7 +741,6 @@ extension DownloadManager: DownloadSessionDelegate {
             return
         }
 
-        // Only update progress for media downloads to avoid confusing UI
         if case .media = downloadJob.type {
             updateTaskState(taskID: downloadJob.taskID, state: .downloading(progress))
         }
@@ -666,20 +756,16 @@ extension DownloadManager: DownloadSessionDelegate {
 
         let swiftfinDownloadTask = downloads[downloadTaskIndex]
 
-        // Check if we should retry
         if swiftfinDownloadTask.shouldRetry(for: error) {
             logger.info("Retrying download for: \(swiftfinDownloadTask.item.displayTitle) (attempt \(swiftfinDownloadTask.retryCount + 1))")
 
-            // Update retry count in our tracking
             if var updatedTask = downloads.first(where: { $0.taskID == swiftfinDownloadTask.taskID }) {
                 updatedTask.incrementRetryCount()
-                // Update the task in our array
                 if let index = downloads.firstIndex(where: { $0.taskID == swiftfinDownloadTask.taskID }) {
                     downloads[index] = updatedTask
                 }
             }
 
-            // Exponential backoff: 2^retryCount seconds
             let delay = pow(2.0, Double(swiftfinDownloadTask.retryCount + 1))
 
             DispatchQueue.global().asyncAfter(deadline: .now() + delay) {
@@ -689,13 +775,10 @@ extension DownloadManager: DownloadSessionDelegate {
             }
 
         } else {
-            // Handle failed downloads based on type
             switch downloadJob.type {
             case .media, .metadata:
-                // Media and metadata download failures are critical
                 updateTaskState(taskID: downloadJob.taskID, state: .error(error))
             case .backdropImage, .primaryImage, .subtitle:
-                // Image and subtitle download failures are not critical
                 logger
                     .warning("\(downloadJob.type) download failed, checking if task can complete without it: \(error.localizedDescription)")
 
@@ -706,16 +789,11 @@ extension DownloadManager: DownloadSessionDelegate {
             }
         }
 
-        // Clean up active job
         sessionManager.removeDownloadJob(for: taskIdentifier)
     }
 
     func sessionDidFinishBackgroundEvents() {
-        logger.trace("Background URLSession did finish events")
-
-        DispatchQueue.main.async {
-            // TODO: Call completion handler for background app refresh
-        }
+        DispatchQueue.main.async {}
     }
 
     private func retrySpecificDownload(for downloadTask: DownloadTask, jobType: DownloadJobType) async {
@@ -725,7 +803,6 @@ extension DownloadManager: DownloadSessionDelegate {
         case .backdropImage, .primaryImage:
             await retryImageDownload(for: downloadTask, imageType: jobType)
         case .metadata:
-            // Metadata doesn't need retry, just regenerate
             do {
                 try metadataManager.writeMetadata(for: downloadTask)
                 markJobCompleted(taskID: downloadTask.taskID, jobType: .metadata)
@@ -733,7 +810,6 @@ extension DownloadManager: DownloadSessionDelegate {
                 logger.error("Failed to save metadata on retry: \(error.localizedDescription)")
             }
         case .subtitle:
-            // TODO: Implement subtitle retry
             break
         }
     }

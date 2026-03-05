@@ -121,7 +121,7 @@ extension ItemView {
 
             router.route(
                 to: .videoPlayer(
-                    manager: OnlineVideoPlayerManager(
+                    manager: AutoVideoPlayerManager(
                         item: playButtonItem,
                         mediaSource: selectedMediaSource
                     )

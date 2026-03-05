@@ -232,22 +232,23 @@ extension BaseItemDto {
             }
     }
 
-    // TODO: user hierarchy for downloads
     var downloadFolder: URL? {
         guard let type, let id else { return nil }
 
         let root = URL.downloads
-//            .appendingPathComponent(userSession.user.id)
 
         switch type {
         case .movie:
             return root
                 .appendingPathComponent(id)
         case .episode:
-            // For episodes, use series ID as the root folder
             guard let seriesID = seriesID else { return nil }
-            return root
-                .appendingPathComponent(seriesID)
+            let seriesFolder = root.appendingPathComponent(seriesID)
+            if let season = parentIndexNumber {
+                return seriesFolder
+                    .appendingPathComponent("Season-\(String(format: "%02d", season))")
+            }
+            return seriesFolder
         default:
             return nil
         }

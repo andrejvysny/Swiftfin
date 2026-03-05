@@ -143,8 +143,19 @@ struct ItemDownloadListView: View {
 
     private func handleEpisodeTap(_ episode: DownloadedEpisode) {
         logger.info("User tapped on episode: \(episode.displayTitle)")
-        // Navigate to episode player
-        router.route(to: .item(item: episode.episodeItem))
+        if let mediaSource = resolveMediaSource(for: episode.episodeItem, using: episode.versionInfo) {
+            router.route(
+                to: .videoPlayer(
+                    manager: AutoVideoPlayerManager(
+                        item: episode.episodeItem,
+                        mediaSource: mediaSource
+                    )
+                )
+            )
+        } else {
+            logger.warning("Unable to resolve media source for episode: \(episode.displayTitle). Routing to item view")
+            router.route(to: .item(item: episode.episodeItem))
+        }
     }
 
     private func deleteEpisode(_ episode: DownloadedEpisode) {
@@ -162,6 +173,30 @@ struct ItemDownloadListView: View {
         viewModel.deleteEpisode(episodeToDelete)
 
         self.episodeToDelete = nil
+    }
+
+    private func resolveMediaSource(for item: BaseItemDto, using versionInfo: VersionInfo?) -> MediaSourceInfo? {
+        guard let mediaSources = item.mediaSources, !mediaSources.isEmpty else { return nil }
+
+        if let mediaSourceId = versionInfo?.mediaSourceId,
+           let match = mediaSources.first(where: { $0.id == mediaSourceId })
+        {
+            return match
+        }
+
+        if let versionId = versionInfo?.versionId,
+           let match = mediaSources.first(where: { $0.id == versionId })
+        {
+            return match
+        }
+
+        if let itemId = item.id,
+           let match = mediaSources.first(where: { $0.id == itemId })
+        {
+            return match
+        }
+
+        return mediaSources.first
     }
 }
 
@@ -200,7 +235,7 @@ struct DownloadedEpisodeRow: View {
                 }
 
                 if let fileSize = episode.fileSize {
-                    Text(fileSize.toReadableFileSize())
+                    Text(fileSize.formatted(.fileSize))
                         .font(.caption2)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
@@ -209,6 +244,17 @@ struct DownloadedEpisodeRow: View {
                 }
 
                 Spacer()
+
+                // Play button
+                Button {
+                    onTap()
+                } label: {
+                    Image(systemName: "play.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.tint)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("Play episode"))
 
                 // Delete button
                 Button {

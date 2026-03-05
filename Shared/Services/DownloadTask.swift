@@ -9,7 +9,6 @@
 import Foundation
 import JellyfinAPI
 
-/// A pure data model representing a download task
 struct DownloadTask {
 
     enum DownloadError: Error {
@@ -36,7 +35,6 @@ struct DownloadTask {
 
     let item: BaseItemDto
 
-    // Enhanced API properties
     let taskID: UUID
     let mediaSourceId: String?
     let versionId: String?
@@ -48,14 +46,10 @@ struct DownloadTask {
     let deviceProfileId: String?
     let quality: DownloadQuality
 
-    // Pause/Resume support
     var resumeData: Data?
-
-    // Retry logic
     var retryCount: Int = 0
     let maxRetries: Int = 3
 
-    // For TV series episodes
     var season: Int? {
         item.parentIndexNumber
     }

@@ -16,23 +16,32 @@ final class DownloadVideoPlayerManager: VideoPlayerManager {
         super.init()
 
         let downloadManager = Container.shared.downloadManager()
-        guard let playbackURL = downloadManager.getMediaURL(for: downloadTask) else {
-            logger.error("Download task does not have media url for item: \(downloadTask.item.displayTitle)")
+        guard let playbackInfo = downloadManager.playbackInfo(
+            for: downloadTask.item,
+            mediaSourceId: downloadTask.mediaSourceId
+        ) else {
+            logger.error("Download task does not have playback info for item: \(downloadTask.item.displayTitle)")
 
             return
         }
 
+        let mediaSource = playbackInfo.mediaSource
+        let mediaStreams = mediaSource.mediaStreams ?? []
+
+        let selectedAudioIndex = playbackInfo.defaultAudioStreamIndex
+        let selectedSubtitleIndex = playbackInfo.defaultSubtitleStreamIndex
+
         self.currentViewModel = .init(
-            playbackURL: playbackURL,
-            item: downloadTask.item,
-            mediaSource: .init(),
-            playSessionID: "",
-            videoStreams: downloadTask.item.videoStreams,
-            audioStreams: downloadTask.item.audioStreams,
-            subtitleStreams: downloadTask.item.subtitleStreams,
-            selectedAudioStreamIndex: 1,
-            selectedSubtitleStreamIndex: 1,
-            chapters: downloadTask.item.fullChapterInfo,
+            playbackURL: playbackInfo.fileURL,
+            item: playbackInfo.item,
+            mediaSource: mediaSource,
+            playSessionID: "offline-\(downloadTask.taskID.uuidString)",
+            videoStreams: mediaStreams.filter { $0.type == .video },
+            audioStreams: mediaStreams.filter { $0.type == .audio },
+            subtitleStreams: mediaStreams.filter { $0.type == .subtitle },
+            selectedAudioStreamIndex: selectedAudioIndex,
+            selectedSubtitleStreamIndex: selectedSubtitleIndex,
+            chapters: playbackInfo.item.fullChapterInfo,
             playMethod: .directPlay
         )
     }
