@@ -9,13 +9,15 @@
 import JellyfinAPI
 import SwiftUI
 
-#if os(iOS)
 extension NavigationRoute {
 
     static let downloadList = NavigationRoute(
         id: "downloadList"
     ) {
+        #if os(iOS)
         DownloadListView()
+        #else
+        EmptyView()
+        #endif
     }
 }
-#endif

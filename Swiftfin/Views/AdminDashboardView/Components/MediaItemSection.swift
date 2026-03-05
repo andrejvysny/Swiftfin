@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import JellyfinAPI
@@ -18,29 +18,11 @@ extension AdminDashboardView {
         var body: some View {
             Section {
                 HStack(alignment: .bottom, spacing: 12) {
-                    Group {
-                        if item.type == .audio {
-                            ZStack {
-                                Color.clear
-
-                                ImageView(item.squareImageSources(maxWidth: 60, quality: 90))
-                                    .failure {
-                                        SystemImageContentView(systemName: item.systemImage)
-                                    }
-                            }
-                            .squarePosterStyle()
-                        } else {
-                            ZStack {
-                                Color.clear
-
-                                ImageView(item.portraitImageSources(maxWidth: 60, quality: 90))
-                                    .failure {
-                                        SystemImageContentView(systemName: item.systemImage)
-                                    }
-                            }
-                            .posterStyle(.portrait)
-                        }
-                    }
+                    PosterImage(
+                        item: item,
+                        type: item.preferredPosterDisplayType,
+                        contentMode: .fit
+                    )
                     .frame(width: 100)
                     .accessibilityIgnoresInvertColors()
 

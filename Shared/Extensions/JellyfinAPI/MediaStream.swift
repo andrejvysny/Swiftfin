@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Factory
@@ -17,7 +17,7 @@ extension MediaStream {
 
     static var none: MediaStream = .init(displayTitle: L10n.none, index: -1)
 
-    var asPlaybackChild: VLCVideoPlayer.PlaybackChild? {
+    var asVLCPlaybackChild: VLCVideoPlayer.PlaybackChild? {
         guard let deliveryURL, let client = Container.shared.currentUserSession()?.client else { return nil }
 
         let deliveryPath = deliveryURL.removingFirst(if: client.configuration.url.absoluteString.last == "/")

@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import SwiftUI
@@ -11,22 +11,16 @@ import SwiftUI
 extension EnvironmentValues {
 
     @Entry
-    var audioOffset: Binding<Int> = .constant(0)
-
-    @Entry
-    var aspectFilled: Binding<Bool> = .constant(false)
-
-    @Entry
-    var currentOverlayType: Binding<VideoPlayer.OverlayType> = .constant(.main)
+    var audioOffset: Binding<Duration> = .constant(.zero)
 
     @Entry
     var isEditing: Bool = false
 
     @Entry
-    var isPresentingOverlay: Binding<Bool> = .constant(false)
+    var isInMenu: Bool = false
 
     @Entry
-    var isScrubbing: Binding<Bool> = .constant(false)
+    var isOverComplexContent: Bool = false
 
     @Entry
     var isSelected: Bool = false
@@ -38,5 +32,5 @@ extension EnvironmentValues {
     var safeAreaInsets: EdgeInsets = UIApplication.shared.keyWindow?.safeAreaInsets.asEdgeInsets ?? .zero
 
     @Entry
-    var subtitleOffset: Binding<Int> = .constant(0)
+    var subtitleOffset: Binding<Duration> = .constant(.zero)
 }

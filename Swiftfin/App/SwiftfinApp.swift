@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import CoreStore
@@ -12,7 +12,6 @@ import Factory
 import Logging
 import Nuke
 import PreferencesView
-import Pulse
 import PulseLogHandler
 import SwiftUI
 
@@ -30,6 +29,8 @@ struct SwiftfinApp: App {
         // Logging
         LoggingSystem.bootstrap { label in
 
+            // TODO: have setting for log level
+            //       - default info, boolean to go down to trace
             let handlers: [any LogHandler] = [PersistentLogHandler(label: label)]
             #if DEBUG
                 .appending(SwiftfinConsoleHandler())
@@ -74,15 +75,17 @@ struct SwiftfinApp: App {
 
     var body: some Scene {
         WindowGroup {
-            PreferencesView {
-                RootView()
-                    .supportedOrientations(UIDevice.isPad ? .allButUpsideDown : .portrait)
+            OverlayToastView {
+                PreferencesView {
+                    RootView()
+                        .supportedOrientations(UIDevice.isPad ? .allButUpsideDown : .portrait)
+                }
             }
             .ignoresSafeArea()
-            .onNotification(.applicationDidEnterBackground) {
+            .onAppDidEnterBackground {
                 Defaults[.backgroundTimeStamp] = Date.now
             }
-            .onNotification(.applicationWillEnterForeground) {
+            .onAppWillEnterForeground {
 
                 // TODO: needs to check if any background playback is happening
                 //       - atow, background video playback isn't officially supported

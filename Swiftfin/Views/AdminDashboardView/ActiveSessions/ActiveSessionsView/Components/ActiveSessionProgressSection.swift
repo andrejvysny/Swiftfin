@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Defaults
@@ -72,7 +72,7 @@ extension ActiveSessionsView {
                             }
                         }
 
-                        Text(playMethod)
+                        Text(playMethod.displayTitle)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -80,11 +80,11 @@ extension ActiveSessionsView {
                 Spacer()
 
                 HStack(spacing: 2) {
-                    Text(playState.positionSeconds ?? 0, format: .runtime)
+                    Text(playState.position ?? .zero, format: .runtime)
 
                     Text("/")
 
-                    Text(item.runTimeSeconds, format: .runtime)
+                    Text(item.runtime ?? .zero, format: .runtime)
                 }
                 .monospacedDigit()
                 .fixedSize(horizontal: true, vertical: true)

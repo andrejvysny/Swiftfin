@@ -3,21 +3,13 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Algorithms
 import CryptoKit
 import Foundation
 import SwiftUI
-
-// TODO: Remove this and strongly type instances if it makes sense.
-extension String: Displayable {
-
-    var displayTitle: String {
-        self
-    }
-}
 
 extension String {
 
@@ -37,9 +29,9 @@ extension String {
 
     func appending(_ element: @autoclosure () -> String, if condition: Bool) -> String {
         if condition {
-            return self + element()
+            self + element()
         } else {
-            return self
+            self
         }
     }
 
@@ -59,9 +51,9 @@ extension String {
 
     func prepending(_ element: String, if condition: Bool) -> String {
         if condition {
-            return element + self
+            element + self
         } else {
-            return self
+            self
         }
     }
 
@@ -80,10 +72,6 @@ extension String {
         return padding + self
     }
 
-    var text: Text {
-        Text(self)
-    }
-
     var initials: String {
         split(separator: " ")
             .compactMap(\.first)
@@ -92,7 +80,7 @@ extension String {
 
     static let emptyDash = "--"
 
-    static let emptyTime = "--:--"
+    static let emptyRuntime = "--:--"
 
     var shortFileName: String {
         (split(separator: "/").last?.description ?? self)
@@ -140,6 +128,18 @@ extension String {
 
     var url: URL? {
         URL(string: self)
+    }
+}
+
+extension String? {
+
+    /// Splits a delimited raw value string into typed components
+    func components<T: RawRepresentable>(
+        of type: T.Type,
+        separator: Character = ","
+    ) -> [T] where T.RawValue == String {
+        self?.split(separator: separator)
+            .compactMap { T(rawValue: String($0)) } ?? []
     }
 }
 

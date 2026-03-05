@@ -3,14 +3,14 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
-// TODO: think about what to do for square (music)
 enum PosterDisplayType: String, CaseIterable, Displayable, Storable, SystemImageable {
 
     case landscape
     case portrait
+    case square
 
     var displayTitle: String {
         switch self {
@@ -18,6 +18,8 @@ enum PosterDisplayType: String, CaseIterable, Displayable, Storable, SystemImage
             L10n.landscape
         case .portrait:
             L10n.portrait
+        case .square:
+            "Square"
         }
     }
 
@@ -27,6 +29,16 @@ enum PosterDisplayType: String, CaseIterable, Displayable, Storable, SystemImage
             "rectangle.fill"
         case .portrait:
             "rectangle.portrait.fill"
+        case .square:
+            "square.fill"
         }
+    }
+}
+
+// TODO: remove after library views support all types
+extension PosterDisplayType: SupportedCaseIterable {
+
+    static var supportedCases: [PosterDisplayType] {
+        [.landscape, .portrait]
     }
 }

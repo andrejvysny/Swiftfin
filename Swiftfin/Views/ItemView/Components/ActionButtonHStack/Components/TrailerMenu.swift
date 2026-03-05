@@ -3,19 +3,17 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Factory
 import JellyfinAPI
+import Logging
 import SwiftUI
 
 extension ItemView {
 
     struct TrailerMenu: View {
-
-        @Injected(\.logService)
-        private var logger
 
         // MARK: - Stored Value
 
@@ -34,6 +32,7 @@ extension ItemView {
 
         let localTrailers: [BaseItemDto]
         let externalTrailers: [MediaURL]
+        private let logger = Logger.swiftfin()
 
         private var showLocalTrailers: Bool {
             enabledTrailers.contains(.local) && localTrailers.isNotEmpty
@@ -61,9 +60,9 @@ extension ItemView {
 
         @ViewBuilder
         private var trailerButton: some View {
-            ActionButton(
+            Button(
                 L10n.trailers,
-                icon: "movieclapper"
+                systemImage: "movieclapper"
             ) {
                 if showLocalTrailers, let firstTrailer = localTrailers.first {
                     playLocalTrailer(firstTrailer)
@@ -79,7 +78,7 @@ extension ItemView {
 
         @ViewBuilder
         private var trailerMenu: some View {
-            ActionButton(L10n.trailers, icon: "movieclapper") {
+            Menu(L10n.trailers, systemImage: "movieclapper") {
 
                 if showLocalTrailers {
                     Section(L10n.local) {
@@ -112,13 +111,11 @@ extension ItemView {
         // MARK: - Play: Local Trailer
 
         private func playLocalTrailer(_ trailer: BaseItemDto) {
-            if let selectedMediaSource = trailer.mediaSources?.first {
-                router.route(
-                    to: .videoPlayer(manager: AutoVideoPlayerManager(item: trailer, mediaSource: selectedMediaSource))
-                )
+            if let mediaSource = trailer.mediaSources?.first {
+                router.route(to: .videoPlayer(item: trailer, mediaSource: mediaSource))
             } else {
                 logger.log(level: .error, "No media sources found")
-                error = JellyfinAPIError(L10n.unknownError)
+                error = ErrorMessage(L10n.unknownError)
             }
         }
 
@@ -129,10 +126,10 @@ extension ItemView {
                 UIApplication.shared.open(url) { success in
                     guard !success else { return }
 
-                    error = JellyfinAPIError(L10n.unableToOpenTrailer)
+                    error = ErrorMessage(L10n.unableToOpenTrailer)
                 }
             } else {
-                error = JellyfinAPIError(L10n.unableToOpenTrailer)
+                error = ErrorMessage(L10n.unableToOpenTrailer)
             }
         }
     }

@@ -3,13 +3,15 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Foundation
 import JellyfinAPI
+import SwiftUI
 
 // Note: assumes programs are sorted by start date
+// TODO: rethink implementation
 
 /// Structure that has a channel and associated programs.
 struct ChannelProgram: Hashable, Identifiable {
@@ -40,7 +42,13 @@ struct ChannelProgram: Hashable, Identifiable {
     }
 }
 
+// TODO: implement all protocols, pass from channel
+
 extension ChannelProgram: Poster {
+
+    var preferredPosterDisplayType: PosterDisplayType {
+        .square
+    }
 
     var unwrappedIDHashOrZero: Int {
         channel.id?.hashValue ?? 0
@@ -52,5 +60,9 @@ extension ChannelProgram: Poster {
 
     var systemImage: String {
         channel.systemImage
+    }
+
+    func transform(image: Image) -> some View {
+        image
     }
 }

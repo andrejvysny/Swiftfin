@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import SwiftUI
@@ -15,7 +15,7 @@ struct RedrawOnNotificationView<Content: View, P>: View {
 
     private let filter: (P) -> Bool
     private let key: Notifications.Key<P>
-    private let content: () -> Content
+    private let content: Content
 
     init(
         _ key: Notifications.Key<P>,
@@ -24,11 +24,11 @@ struct RedrawOnNotificationView<Content: View, P>: View {
     ) {
         self.filter = filter
         self.key = key
-        self.content = content
+        self.content = content()
     }
 
     var body: some View {
-        content()
+        content
             .id(id)
             .onNotification(key) { p in
                 guard filter(p) else { return }

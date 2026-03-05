@@ -3,14 +3,17 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Algorithms
+import AVKit
 import Factory
 import Foundation
 import JellyfinAPI
-import UIKit
+import MediaPlayer
+import Nuke
+import SwiftUI
 
 // TODO: clean up
 
@@ -41,6 +44,84 @@ extension BaseItemDto: LibraryIdentifiable {
 
 extension BaseItemDto {
 
+    var avMetadata: [AVMetadataItem] {
+        let title: String
+        var subtitle: String? = nil
+        let description = overview
+
+        if type == .episode,
+           let seriesName
+        {
+            title = seriesName
+            subtitle = displayTitle
+        } else {
+            title = displayTitle
+        }
+
+        return [
+            AVMetadataIdentifier.commonIdentifierTitle: title,
+            .iTunesMetadataTrackSubTitle: subtitle,
+            .commonIdentifierDescription: description,
+        ]
+            .compactMap { identifier, value in
+                let item = AVMutableMetadataItem()
+                item.identifier = identifier
+                item.value = value as? NSCopying & NSObjectProtocol
+                item.extendedLanguageTag = "und"
+
+                return item.copy() as? AVMetadataItem
+            }
+    }
+
+    func nowPlayableStaticMetadata(_ image: UIImage? = nil) -> NowPlayableStaticMetadata {
+
+        let mediaType: MPNowPlayingInfoMediaType = {
+            switch type {
+            case .audio, .audioBook: .audio
+            default: .video
+            }
+        }()
+
+        let title: String = {
+            if type == .episode,
+               let seriesName
+            {
+                seriesName
+            } else {
+                displayTitle
+            }
+        }()
+
+        let albumArtist: String? = {
+            switch type {
+            case .audio:
+                artists?.joined(separator: ", ")
+            default:
+                nil
+            }
+        }()
+
+        let albumTitle: String? = {
+            switch type {
+            case .audio:
+                album
+            default:
+                nil
+            }
+        }()
+
+        // TODO: only fill artist, albumArtist, and albumTitle if audio type
+        return .init(
+            mediaType: mediaType,
+            isLiveStream: isLiveStream,
+            title: title,
+            artist: subtitle,
+            artwork: image.map { image in MPMediaItemArtwork(boundsSize: image.size) { _ in image }},
+            albumArtist: albumArtist,
+            albumTitle: albumTitle
+        )
+    }
+
     var birthday: Date? {
         guard type == .person else { return nil }
         return premiereDate
@@ -66,19 +147,116 @@ extension BaseItemDto {
         return genres.map(ItemGenre.init)
     }
 
-    var runTimeSeconds: Int {
-        let playbackPositionTicks = runTimeTicks ?? 0
-        return Int(playbackPositionTicks / 10_000_000)
+    /// Differs from `isLive` to indicate an item
+    /// would be streaming from a live source.
+    var isLiveStream: Bool {
+        channelType == .tv
+    }
+
+    /// Whether the item has independent playable content, similar
+    /// to if an item can provide its own media sources.
+    ///
+    /// ie: A movie and an episode can be directly played,
+    ///     but a series is not as its episodes are playable.
+    var isPlayable: Bool {
+        guard !isMissing else { return false }
+
+        return switch type {
+        case .series:
+            false
+        default:
+            true
+        }
+    }
+
+    /// The primary image handler for building the
+    /// image used in the now playing system.
+    @MainActor
+    func getNowPlayingImage() async -> UIImage? {
+        let imageSources = thumbImageSources()
+
+        guard let firstImage = await ImagePipeline.Swiftfin.other.loadFirstImage(from: imageSources) else {
+            let failedSystemContentView = SystemImageContentView(
+                systemName: systemImage
+            )
+            .posterStyle(preferredPosterDisplayType)
+            .frame(width: 400)
+
+            return ImageRenderer(content: failedSystemContentView).uiImage
+        }
+
+        let image = Image(uiImage: firstImage)
+            .resizable()
+        let transformedImage = ZStack {
+            Rectangle()
+                .fill(Color.secondarySystemFill)
+
+            transform(image: image)
+        }
+        .posterAspectRatio(preferredPosterDisplayType, contentMode: .fit)
+        .frame(width: 400)
+
+        return ImageRenderer(content: transformedImage).uiImage
+    }
+
+    func getPlaybackItemProvider(
+        userSession: UserSession
+    ) -> MediaPlayerItemProvider {
+        switch type {
+        case .program:
+            MediaPlayerItemProvider(item: self) { program in
+                guard let channel = try? await self.getChannel(
+                    for: program,
+                    userSession: userSession
+                ),
+                    let mediaSource = channel.mediaSources?.first
+                else {
+                    throw ErrorMessage(L10n.unknownError)
+                }
+                return try await MediaPlayerItem.build(for: program, mediaSource: mediaSource)
+            }
+        default:
+            MediaPlayerItemProvider(item: self) { item in
+                guard let mediaSource = item.mediaSources?.first else {
+                    throw ErrorMessage(L10n.unknownError)
+                }
+                return try await MediaPlayerItem.build(for: item, mediaSource: mediaSource)
+            }
+        }
+    }
+
+    func getChannel(
+        for program: BaseItemDto,
+        userSession: UserSession
+    ) async throws -> BaseItemDto? {
+        guard type == .program else { return nil }
+
+        var parameters = Paths.GetItemsByUserIDParameters()
+        parameters.fields = .MinimumFields
+        parameters.ids = [program.channelID ?? ""]
+
+        let request = Paths.getItemsByUserID(
+            userID: userSession.user.id,
+            parameters: parameters
+        )
+        let response = try await userSession.client.send(request)
+
+        return response.value.items?.first
+    }
+
+    var runtime: Duration? {
+        guard let ticks = runTimeTicks else { return nil }
+        return Duration.ticks(ticks)
+    }
+
+    var startSeconds: Duration? {
+        guard let ticks = userData?.playbackPositionTicks else { return nil }
+        return Duration.ticks(ticks)
     }
 
     var seasonEpisodeLabel: String? {
         guard let seasonNo = parentIndexNumber, let episodeNo = indexNumber else { return nil }
         return L10n.seasonAndEpisode(String(seasonNo), String(episodeNo))
-    }
-
-    var startTimeSeconds: Int {
-        let playbackPositionTicks = userData?.playbackPositionTicks ?? 0
-        return Int(playbackPositionTicks / 10_000_000)
     }
 
     // MARK: Calculations
@@ -91,7 +269,7 @@ extension BaseItemDto {
             return formatter
         }()
 
-        guard let runTimeTicks = runTimeTicks,
+        guard let runTimeTicks,
               let text = timeHMSFormatter.string(from: Double(runTimeTicks / 10_000_000)) else { return nil }
 
         return text
@@ -155,9 +333,9 @@ extension BaseItemDto {
 
     var isUnaired: Bool {
         if let premierDate = premiereDate {
-            return premierDate > Date()
+            premierDate > Date()
         } else {
-            return false
+            false
         }
     }
 
@@ -167,7 +345,7 @@ extension BaseItemDto {
     }
 
     var premiereDateLabel: String? {
-        guard let premiereDate = premiereDate else { return nil }
+        guard let premiereDate else { return nil }
 
         let dateFormatter = DateFormatter()
         dateFormatter.dateStyle = .medium
@@ -175,7 +353,7 @@ extension BaseItemDto {
     }
 
     var premiereDateYear: String? {
-        guard let premiereDate = premiereDate else { return nil }
+        guard let premiereDate else { return nil }
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "YYYY"
         return dateFormatter.string(from: premiereDate)
@@ -195,18 +373,17 @@ extension BaseItemDto {
 
     // MARK: Chapter Images
 
-    var fullChapterInfo: [ChapterInfo.FullInfo] {
-        guard let chapters else { return [] }
+    var fullChapterInfo: [ChapterInfo.FullInfo]? {
 
-        let ranges: [Range<Int>] = chapters
-            .map(\.startTimeSeconds)
-            .appending(runTimeSeconds + 1)
-            .adjacentPairs()
-            .map { $0 ..< $1 }
+        guard let chapters = chapters?
+            .sorted(using: \.startPositionTicks)
+            .compacted(using: \.startPositionTicks) else { return nil }
 
-        return zip(chapters, ranges)
+        guard let userSession = Container.shared.currentUserSession() else { return nil }
+
+        return chapters
             .enumerated()
-            .map { i, zip in
+            .map { i, chapter in
 
                 let parameters = Paths.GetItemImageParameters(
                     maxWidth: 500,
@@ -220,14 +397,13 @@ extension BaseItemDto {
                     parameters: parameters
                 )
 
-                let imageURL = Container.shared.currentUserSession()!
+                let imageURL = userSession
                     .client
                     .fullURL(with: request)
 
                 return .init(
-                    chapterInfo: zip.0,
-                    imageSource: .init(url: imageURL),
-                    secondsRange: zip.1
+                    chapterInfo: chapter,
+                    imageSource: .init(url: imageURL)
                 )
             }
     }
@@ -265,9 +441,9 @@ extension BaseItemDto {
         case .audio, .audioBook, .book, .channel, .channelFolderItem, .episode,
              .movie, .liveTvChannel, .liveTvProgram, .musicAlbum, .musicArtist, .musicVideo, .playlist,
              .program, .recording, .season, .series, .trailer, .tvChannel, .tvProgram, .video:
-            return true
+            true
         default:
-            return false
+            false
         }
     }
 
@@ -277,9 +453,9 @@ extension BaseItemDto {
         case .audio, .audioBook, .book, .boxSet, .channel, .channelFolderItem, .collectionFolder, .episode, .manualPlaylistsFolder,
              .movie, .liveTvChannel, .liveTvProgram, .musicAlbum, .musicArtist, .musicVideo, .playlist, .playlistsFolder,
              .program, .recording, .season, .series, .trailer, .tvChannel, .tvProgram, .video:
-            return true
+            true
         default:
-            return false
+            false
         }
     }
 
@@ -317,9 +493,24 @@ extension BaseItemDto {
         case .audio, .audioBook, .book, .boxSet, .channelFolderItem, .collectionFolder, .episode, .manualPlaylistsFolder, .movie,
              .liveTvProgram, .musicAlbum, .musicArtist, .musicVideo, .playlist, .playlistsFolder, .program, .recording, .season,
              .series, .trailer, .tvProgram, .video:
-            return true
+            true
         default:
-            return false
+            false
         }
+    }
+
+    func getFullItem(userSession: UserSession) async throws -> BaseItemDto {
+        guard let id else {
+            throw ErrorMessage(L10n.unknownError)
+        }
+
+        let request = Paths.getItem(itemID: id, userID: userSession.user.id)
+        let response = try await userSession.client.send(request)
+
+        // A check against `id` would typically be done, but a plugin
+        // may have provided `self` or the response item and may not
+        // be invariant over `id`.
+
+        return response.value
     }
 }

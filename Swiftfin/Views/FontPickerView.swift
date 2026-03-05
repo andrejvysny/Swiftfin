@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import SwiftUI
@@ -11,19 +11,26 @@ import UIKit
 
 struct FontPickerView: View {
 
-    @Binding
-    var selection: String
+    let selection: Binding<String>
+
+    private var elements: [DisplayableBox<String>] {
+        UIFont.familyNames
+            .map(DisplayableBox.init)
+    }
 
     var body: some View {
         SelectorView(
-            selection: $selection,
-            sources: UIFont.familyNames
+            selection: selection.map(
+                getter: DisplayableBox.init,
+                setter: { $0.displayTitle }
+            ),
+            sources: elements
         )
         .label { fontFamily in
-            Text(fontFamily)
+            Text(fontFamily.displayTitle)
                 .foregroundColor(.primary)
-                .font(.custom(fontFamily, size: 18))
+                .font(.custom(fontFamily.displayTitle, size: 18))
         }
-        .navigationTitle(L10n.subtitleFont)
+        .navigationTitle(L10n.subtitleFont.localizedCapitalized)
     }
 }

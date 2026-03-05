@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import SwiftUI
@@ -17,12 +17,17 @@ import SwiftUI
 struct SeparatorVStack<Content: View, Separator: View>: View {
 
     private let alignment: HorizontalAlignment
-    private let content: () -> Content
-    private let separator: () -> Separator
+    private let content: Content
+    private let separator: Separator
 
     var body: some View {
-        _VariadicView.Tree(SeparatorVStackLayout(alignment: alignment, separator: separator)) {
-            content()
+        _VariadicView.Tree(
+            SeparatorVStackLayout(
+                alignment: alignment,
+                separator: separator
+            )
+        ) {
+            content
         }
     }
 }
@@ -36,8 +41,8 @@ extension SeparatorVStack {
     ) {
         self.init(
             alignment: alignment,
-            content: content,
-            separator: separator
+            content: content(),
+            separator: separator()
         )
     }
 }
@@ -47,7 +52,7 @@ extension SeparatorVStack {
     struct SeparatorVStackLayout: _VariadicView_UnaryViewRoot {
 
         let alignment: HorizontalAlignment
-        let separator: () -> Separator
+        let separator: Separator
 
         @ViewBuilder
         func body(children: _VariadicView.Children) -> some View {
@@ -59,7 +64,7 @@ extension SeparatorVStack {
                     child
 
                     if child.id != last {
-                        separator()
+                        separator
                     }
                 }
             }

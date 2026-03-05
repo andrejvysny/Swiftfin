@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Defaults
@@ -34,7 +34,8 @@ extension CustomizeViewsSettings {
                     L10n.nextUpDays,
                     subtitle: {
                         if maxNextUp > 0 {
-                            return Text(maxNextUp, format: .interval(style: .narrow, fields: [.day]))
+                            let duration = Duration.seconds(TimeInterval(maxNextUp))
+                            return Text(duration, format: .units(allowed: [.days], width: .abbreviated))
                         } else {
                             return Text(L10n.disabled)
                         }

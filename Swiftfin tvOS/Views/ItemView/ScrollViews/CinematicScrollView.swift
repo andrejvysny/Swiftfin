@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import JellyfinAPI
@@ -32,18 +32,24 @@ extension ItemView {
         private func withBackgroundImageSource(
             @ViewBuilder content: @escaping (ImageSource) -> some View
         ) -> some View {
-            let item: BaseItemDto
-
-            if viewModel.item.type == .person || viewModel.item.type == .musicArtist,
-               let typeViewModel = viewModel as? CollectionItemViewModel,
-               let randomItem = typeViewModel.randomItem()
+            let item: BaseItemDto = if viewModel.item.type == .person || viewModel.item.type == .musicArtist,
+                                       let typeViewModel = viewModel as? CollectionItemViewModel,
+                                       let randomItem = typeViewModel.randomItem()
             {
-                item = randomItem
+                randomItem
             } else {
-                item = viewModel.item
+                viewModel.item
             }
 
-            let imageType: ImageType = item.type == .episode ? .primary : .backdrop
+            let imageType: ImageType = {
+                switch item.type {
+                case .episode, .musicVideo, .video:
+                    .primary
+                default:
+                    .backdrop
+                }
+            }()
+
             let imageSource = item.imageSource(imageType, maxWidth: 1920)
 
             return content(imageSource)
@@ -179,24 +185,23 @@ extension ItemView {
 
                     Spacer()
 
-                    VStack {
+                    VStack(spacing: 30) {
                         if viewModel.item.type == .person || viewModel.item.type == .musicArtist {
-                            ImageView(viewModel.item.imageSource(.primary, maxWidth: 440))
+                            ImageView(viewModel.item.imageSource(.primary, maxWidth: 450))
                                 .failure {
                                     SystemImageContentView(systemName: viewModel.item.systemImage)
                                 }
                                 .posterStyle(.portrait, contentMode: .fill)
-                                .frame(width: 440)
                                 .cornerRadius(10)
                                 .accessibilityIgnoresInvertColors()
                         } else if viewModel.item.presentPlayButton {
                             ItemView.PlayButton(viewModel: viewModel)
                                 .focused($focusedLayer, equals: .playButton)
+                                .frame(height: 100)
                         }
-
                         ItemView.ActionButtonHStack(viewModel: viewModel)
                             .focused($focusedLayer, equals: .actionButtons)
-                            .frame(width: 440)
+                            .frame(height: 100)
                     }
                     .frame(width: 450)
                     .padding(.leading, 150)

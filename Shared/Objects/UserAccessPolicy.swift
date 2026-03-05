@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 // TODO: require remote sign in every time
@@ -26,4 +26,33 @@ enum UserAccessPolicy: String, CaseIterable, Codable, Displayable {
             L10n.pin
         }
     }
+
+    func createReason(user: UserState) -> String? {
+        switch self {
+        case .none: nil
+        case .requireDeviceAuthentication:
+            L10n.requireDeviceAuthForUser(user.username)
+        case .requirePin:
+            L10n.createPinForUser(user.username)
+        }
+    }
+
+    func authenticateReason(user: UserState) -> String? {
+        switch self {
+        case .none: nil
+        case .requireDeviceAuthentication:
+            L10n.requireDeviceAuthForUser(user.username)
+        case .requirePin:
+            L10n.enterPinForUser(user.username)
+        }
+    }
+}
+
+protocol EvaluatedLocalUserAccessPolicy {}
+
+struct EmptyEvaluatedUserAccessPolicy: EvaluatedLocalUserAccessPolicy {}
+
+struct PinEvaluatedUserAccessPolicy: EvaluatedLocalUserAccessPolicy {
+    let pin: String
+    let pinHint: String?
 }

@@ -3,10 +3,11 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Foundation
+import SwiftUI
 
 struct AnyPoster: Poster {
 
@@ -14,6 +15,10 @@ struct AnyPoster: Poster {
 
     init(_ poster: any Poster) {
         self._poster = poster
+    }
+
+    var preferredPosterDisplayType: PosterDisplayType {
+        _poster.preferredPosterDisplayType
     }
 
     var displayTitle: String {
@@ -61,6 +66,11 @@ struct AnyPoster: Poster {
 
     func squareImageSources(maxWidth: CGFloat?, quality: Int?) -> [ImageSource] {
         _poster.squareImageSources(maxWidth: maxWidth, quality: quality)
+    }
+
+    func transform(image: Image) -> some View {
+        _poster.transform(image: image)
+            .eraseToAnyView()
     }
 
     static func == (lhs: AnyPoster, rhs: AnyPoster) -> Bool {

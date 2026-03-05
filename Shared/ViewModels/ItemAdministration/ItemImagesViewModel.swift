@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Combine
@@ -16,7 +16,7 @@ final class ItemImagesViewModel: ViewModel, Stateful, Eventful {
 
     enum Event: Equatable {
         case updated
-        case error(JellyfinAPIError)
+        case error(ErrorMessage)
     }
 
     enum Action: Equatable {
@@ -35,7 +35,7 @@ final class ItemImagesViewModel: ViewModel, Stateful, Eventful {
     enum State: Hashable {
         case initial
         case content
-        case error(JellyfinAPIError)
+        case error(ErrorMessage)
     }
 
     // MARK: - Published Variables
@@ -96,7 +96,7 @@ final class ItemImagesViewModel: ViewModel, Stateful, Eventful {
                         _ = self.backgroundStates.remove(.updating)
                     }
                 } catch {
-                    let apiError = JellyfinAPIError(error.localizedDescription)
+                    let apiError = ErrorMessage(error.localizedDescription)
                     await MainActor.run {
                         self.state = .error(apiError)
                         self.eventSubject.send(.error(apiError))
@@ -111,7 +111,7 @@ final class ItemImagesViewModel: ViewModel, Stateful, Eventful {
             task?.cancel()
 
             task = Task { [weak self] in
-                guard let self = self else { return }
+                guard let self else { return }
                 do {
                     await MainActor.run {
                         _ = self.backgroundStates.insert(.updating)
@@ -124,7 +124,7 @@ final class ItemImagesViewModel: ViewModel, Stateful, Eventful {
                         self.eventSubject.send(.updated)
                     }
                 } catch {
-                    let apiError = JellyfinAPIError(error.localizedDescription)
+                    let apiError = ErrorMessage(error.localizedDescription)
                     await MainActor.run {
                         self.eventSubject.send(.error(apiError))
                     }
@@ -141,7 +141,7 @@ final class ItemImagesViewModel: ViewModel, Stateful, Eventful {
             task?.cancel()
 
             task = Task { [weak self] in
-                guard let self = self else { return }
+                guard let self else { return }
                 do {
                     await MainActor.run {
                         _ = self.backgroundStates.insert(.updating)
@@ -154,7 +154,7 @@ final class ItemImagesViewModel: ViewModel, Stateful, Eventful {
                         self.eventSubject.send(.updated)
                     }
                 } catch {
-                    let apiError = JellyfinAPIError(error.localizedDescription)
+                    let apiError = ErrorMessage(error.localizedDescription)
                     await MainActor.run {
                         self.eventSubject.send(.error(apiError))
                     }
@@ -171,7 +171,7 @@ final class ItemImagesViewModel: ViewModel, Stateful, Eventful {
             task?.cancel()
 
             task = Task { [weak self] in
-                guard let self = self else { return }
+                guard let self else { return }
                 do {
                     await MainActor.run {
                         _ = self.backgroundStates.insert(.updating)
@@ -184,7 +184,7 @@ final class ItemImagesViewModel: ViewModel, Stateful, Eventful {
                         self.eventSubject.send(.updated)
                     }
                 } catch {
-                    let apiError = JellyfinAPIError(error.localizedDescription)
+                    let apiError = ErrorMessage(error.localizedDescription)
                     await MainActor.run {
                         self.eventSubject.send(.error(apiError))
                     }
@@ -201,7 +201,7 @@ final class ItemImagesViewModel: ViewModel, Stateful, Eventful {
             task?.cancel()
 
             task = Task { [weak self] in
-                guard let self = self else { return }
+                guard let self else { return }
                 do {
                     await MainActor.run {
                         _ = self.backgroundStates.insert(.updating)
@@ -214,7 +214,7 @@ final class ItemImagesViewModel: ViewModel, Stateful, Eventful {
                         self.eventSubject.send(.updated)
                     }
                 } catch {
-                    let apiError = JellyfinAPIError(error.localizedDescription)
+                    let apiError = ErrorMessage(error.localizedDescription)
                     await MainActor.run {
                         self.eventSubject.send(.error(apiError))
                     }
@@ -269,7 +269,7 @@ final class ItemImagesViewModel: ViewModel, Stateful, Eventful {
         let uploadLimit: Int = 30_000_000
 
         guard imageData.count <= uploadLimit else {
-            throw JellyfinAPIError(
+            throw ErrorMessage(
                 "This image (\(imageData.count.formatted(.byteCount(style: .file)))) exceeds the maximum allowed size for upload (\(uploadLimit.formatted(.byteCount(style: .file)))."
             )
         }
@@ -298,7 +298,7 @@ final class ItemImagesViewModel: ViewModel, Stateful, Eventful {
             imageData = jpgData
         } else {
             logger.error("Unable to convert given profile image to png/jpg")
-            throw JellyfinAPIError("An internal error occurred")
+            throw ErrorMessage("An internal error occurred")
         }
 
         try await upload(
@@ -313,7 +313,7 @@ final class ItemImagesViewModel: ViewModel, Stateful, Eventful {
     private func uploadFile(_ url: URL, type: ImageType) async throws {
         guard url.startAccessingSecurityScopedResource() else {
             logger.error("Unable to access file at \(url)")
-            throw JellyfinAPIError("An internal error occurred.")
+            throw ErrorMessage("An internal error occurred.")
         }
         defer { url.stopAccessingSecurityScopedResource() }
 
@@ -330,7 +330,7 @@ final class ItemImagesViewModel: ViewModel, Stateful, Eventful {
         default:
             guard let image = try UIImage(data: Data(contentsOf: url)) else {
                 logger.error("Unable to load image from file")
-                throw JellyfinAPIError("An internal error occurred.")
+                throw ErrorMessage("An internal error occurred.")
             }
 
             if let pngData = image.pngData() {
@@ -341,7 +341,7 @@ final class ItemImagesViewModel: ViewModel, Stateful, Eventful {
                 imageData = jpgData
             } else {
                 logger.error("Failed to convert image to png/jpg")
-                throw JellyfinAPIError("An internal error occurred.")
+                throw ErrorMessage("An internal error occurred.")
             }
         }
 

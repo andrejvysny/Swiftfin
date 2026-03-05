@@ -13,6 +13,7 @@ import Logging
 
 final class DownloadManager: NSObject, ObservableObject {
 
+
     private let logger = Logger.swiftfin()
 
     // Published state for UI

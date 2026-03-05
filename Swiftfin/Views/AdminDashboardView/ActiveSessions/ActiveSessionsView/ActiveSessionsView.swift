@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import CollectionVGrid
@@ -37,7 +37,7 @@ struct ActiveSessionsView: View {
     @ViewBuilder
     private var contentView: some View {
         if viewModel.sessions.isEmpty {
-            L10n.none.text
+            Text(L10n.none)
         } else {
             CollectionVGrid(
                 uniqueElements: viewModel.sessions.keys,
@@ -53,14 +53,6 @@ struct ActiveSessionsView: View {
         }
     }
 
-    @ViewBuilder
-    private func errorView(with error: some Error) -> some View {
-        ErrorView(error: error)
-            .onRetry {
-                viewModel.send(.refresh)
-            }
-    }
-
     // MARK: - Body
 
     @ViewBuilder
@@ -69,17 +61,22 @@ struct ActiveSessionsView: View {
             switch viewModel.state {
             case .content:
                 contentView
-            case let .error(error):
-                errorView(with: error)
+            case .error:
+                viewModel.error.map {
+                    ErrorView(error: $0)
+                }
             case .initial:
-                DelayedProgressView()
+                ProgressView()
             }
         }
         .animation(.linear(duration: 0.2), value: viewModel.state)
         .navigationTitle(L10n.sessions)
         .navigationBarTitleDisplayMode(.inline)
+        .refreshable {
+            viewModel.refresh()
+        }
         .topBarTrailing {
-            if viewModel.backgroundStates.contains(.backgroundRefreshing) {
+            if viewModel.background.is(.refreshing) {
                 ProgressView()
             }
 
@@ -94,14 +91,11 @@ struct ActiveSessionsView: View {
             .foregroundStyle(accentColor)
         }
         .onFirstAppear {
-            viewModel.send(.refresh)
+            viewModel.refresh()
         }
         .onReceive(timer) { _ in
             guard !isFiltersPresented else { return }
-            viewModel.send(.backgroundRefresh)
-        }
-        .refreshable {
-            viewModel.send(.refresh)
+            viewModel.background.refresh()
         }
     }
 
@@ -117,25 +111,25 @@ struct ActiveSessionsView: View {
             .tag(nil as Int?)
 
             Label(
-                300.formatted(.hourMinute),
+                Duration.seconds(300).formatted(.hourMinuteAbbreviated),
                 systemImage: "clock"
             )
             .tag(300 as Int?)
 
             Label(
-                900.formatted(.hourMinute),
+                Duration.seconds(900).formatted(.hourMinuteAbbreviated),
                 systemImage: "clock"
             )
             .tag(900 as Int?)
 
             Label(
-                1800.formatted(.hourMinute),
+                Duration.seconds(1800).formatted(.hourMinuteAbbreviated),
                 systemImage: "clock"
             )
             .tag(1800 as Int?)
 
             Label(
-                3600.formatted(.hourMinute),
+                Duration.seconds(3600).formatted(.hourMinuteAbbreviated),
                 systemImage: "clock"
             )
             .tag(3600 as Int?)
@@ -143,7 +137,7 @@ struct ActiveSessionsView: View {
             Text(L10n.lastSeen)
 
             if let activeWithinSeconds = viewModel.activeWithinSeconds {
-                Text(Double(activeWithinSeconds).formatted(.hourMinute))
+                Text(Duration.seconds(activeWithinSeconds).formatted(.units(allowed: [.hours, .minutes])))
             } else {
                 Text(L10n.all)
             }

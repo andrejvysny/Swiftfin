@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Defaults
@@ -73,12 +73,15 @@ struct EditServerUserAccessTagsView: View {
             case .initial, .content:
                 contentView
             case let .error(error):
-                errorView(with: error)
+                ErrorView(error: error)
             }
         }
-        .navigationTitle(L10n.accessTags)
+        .navigationTitle(L10n.accessTags.localizedCapitalized)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(isEditing)
+        .refreshable {
+            viewModel.send(.refresh)
+        }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 if isEditing {
@@ -138,16 +141,6 @@ struct EditServerUserAccessTagsView: View {
         .errorMessage($error)
     }
 
-    // MARK: - ErrorView
-
-    @ViewBuilder
-    private func errorView(with error: some Error) -> some View {
-        ErrorView(error: error)
-            .onRetry {
-                viewModel.send(.refresh)
-            }
-    }
-
     @ViewBuilder
     private func makeRow(tag: TagWithAccess) -> some View {
         EditAccessTagRow(tag: tag.tag) {
@@ -168,7 +161,7 @@ struct EditServerUserAccessTagsView: View {
     private var contentView: some View {
         List {
             ListTitleSection(
-                L10n.accessTags,
+                L10n.accessTags.localizedCapitalized,
                 description: L10n.accessTagsDescription
             ) {
                 UIApplication.shared.open(.jellyfinDocsManagingUsers)

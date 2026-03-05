@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Defaults
@@ -24,6 +24,8 @@ struct SelectUserView: View {
     private var selectUserAllServersSplashscreen
     @Default(.selectUserServerSelection)
     private var serverSelection
+    @Default(.accentColor)
+    private var accentColor
 
     // MARK: - State & Environment Objects
 
@@ -47,11 +49,6 @@ struct SelectUserView: View {
     private var isPresentingConfirmDeleteUsers = false
     @State
     private var isPresentingLocalPin: Bool = false
-
-    // MARK: - Error State
-
-    @State
-    private var error: Error? = nil
 
     @StateObject
     private var viewModel = SelectUserViewModel()
@@ -87,7 +84,7 @@ struct SelectUserView: View {
                 .map { server, users in
                     users.map { (server: server, user: $0) }
                 }
-                .flatMap { $0 }
+                .flatMap(\.self)
                 .sorted(using: \.user.username)
                 .reversed()
                 .map { UserItem(user: $0.user, server: $0.server) }
@@ -128,7 +125,7 @@ struct SelectUserView: View {
         case .none: ()
         }
 
-        viewModel.send(.signIn(user, pin: pin))
+        viewModel.signIn(user, pin: pin)
     }
 
     // MARK: - Grid Content View
@@ -224,6 +221,7 @@ struct SelectUserView: View {
             .focusSection()
         }
         .animation(.linear(duration: 0.1), value: scrollViewOffset)
+        .environment(\.isOverComplexContent, true)
         .background {
             if selectUserUseSplashscreen, splashScreenImageSources.isNotEmpty {
                 ZStack {
@@ -247,7 +245,7 @@ struct SelectUserView: View {
     @ViewBuilder
     private var connectToServerView: some View {
         VStack(spacing: 50) {
-            L10n.connectToJellyfinServerStart.text
+            Text(L10n.connectToJellyfinServerStart)
                 .font(.body)
                 .frame(minWidth: 50, maxWidth: 500)
                 .multilineTextAlignment(.center)
@@ -255,11 +253,11 @@ struct SelectUserView: View {
             Button {
                 router.route(to: .connectToServer)
             } label: {
-                L10n.connect.text
+                Text(L10n.connect)
                     .font(.callout)
                     .fontWeight(.bold)
                     .frame(width: 400, height: 75)
-                    .background(Color.jellyfinPurple)
+                    .background(accentColor)
             }
             .buttonStyle(.card)
         }
@@ -268,7 +266,7 @@ struct SelectUserView: View {
     // MARK: - Functions
 
     private func didDelete(_ server: ServerState) {
-        viewModel.send(.getServers)
+        viewModel.getServers()
 
         if case let SelectUserServerSelection.server(id: id) = serverSelection, server.id == id {
             if viewModel.servers.keys.count == 1, let first = viewModel.servers.keys.first {
@@ -292,7 +290,7 @@ struct SelectUserView: View {
         .ignoresSafeArea()
         .navigationBarBranding()
         .onAppear {
-            viewModel.send(.getServers)
+            viewModel.getServers()
         }
         .onChange(of: isEditingUsers) {
             guard !isEditingUsers else { return }
@@ -323,8 +321,6 @@ struct SelectUserView: View {
         }
         .onReceive(viewModel.events) { event in
             switch event {
-            case let .error(eventError):
-                self.error = eventError
             case let .signedIn(user):
                 Defaults[.lastSignedInUserID] = .signedIn(userID: user.id)
                 Container.shared.currentUserSession.reset()
@@ -332,22 +328,21 @@ struct SelectUserView: View {
             }
         }
         .onNotification(.didConnectToServer) { server in
-            viewModel.send(.getServers)
+            viewModel.getServers()
             serverSelection = .server(id: server.id)
         }
-        .onNotification(.didChangeCurrentServerURL) { server in
-            viewModel.send(.getServers)
-            serverSelection = .server(id: server.id)
+        .onNotification(.didChangeCurrentServerURL) { _ in
+            viewModel.getServers()
         }
-        .onNotification(.didDeleteServer) { server in
-            didDelete(server)
+        .onNotification(.didDeleteServer) { _ in
+            viewModel.getServers()
         }
         .confirmationDialog(
             Text(L10n.deleteUser),
             isPresented: $isPresentingConfirmDeleteUsers
         ) {
             Button(L10n.delete, role: .destructive) {
-                viewModel.send(.deleteUsers(selectedUsers))
+                viewModel.deleteUsers(selectedUsers)
             }
         } message: {
             if selectedUsers.count == 1, let first = selectedUsers.first {
@@ -382,6 +377,6 @@ struct SelectUserView: View {
                 Text(L10n.enterPinForUser(username))
             }
         }
-        .errorMessage($error)
+        .errorMessage($viewModel.error)
     }
 }

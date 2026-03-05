@@ -3,14 +3,10 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
-// TODO: documentation
-// TODO: find a better way to handle backgroundStates on action/state transitions
-//       so that conformers don't have to manually insert/remove them
-// TODO: official way for a cleaner `respond` method so it doesn't have all Task
-//       construction and get bloated
+// TODO: remove, apply the Stateful macro
 
 protocol Stateful: AnyObject {
 

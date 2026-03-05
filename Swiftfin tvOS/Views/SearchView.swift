@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Defaults
@@ -18,11 +18,11 @@ struct SearchView: View {
     @Router
     private var router
 
-    @StateObject
-    private var viewModel = SearchViewModel()
-
     @State
     private var searchQuery = ""
+
+    @StateObject
+    private var viewModel = SearchViewModel()
 
     @ViewBuilder
     private var suggestionsView: some View {
@@ -41,51 +41,105 @@ struct SearchView: View {
     private var resultsView: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 20) {
-                if viewModel.movies.isNotEmpty {
-                    itemsSection(title: L10n.movies, keyPath: \.movies, posterType: searchPosterType)
+                if let movies = viewModel.items[.movie], movies.isNotEmpty {
+                    itemsSection(
+                        title: L10n.movies,
+                        type: .movie,
+                        items: movies,
+                        posterType: searchPosterType
+                    )
                 }
 
-                if viewModel.series.isNotEmpty {
-                    itemsSection(title: L10n.tvShows, keyPath: \.series, posterType: searchPosterType)
+                if let series = viewModel.items[.series], series.isNotEmpty {
+                    itemsSection(
+                        title: L10n.tvShows,
+                        type: .series,
+                        items: series,
+                        posterType: searchPosterType
+                    )
                 }
 
-                if viewModel.collections.isNotEmpty {
-                    itemsSection(title: L10n.collections, keyPath: \.collections, posterType: searchPosterType)
+                if let collections = viewModel.items[.boxSet], collections.isNotEmpty {
+                    itemsSection(
+                        title: L10n.collections,
+                        type: .boxSet,
+                        items: collections,
+                        posterType: searchPosterType
+                    )
                 }
 
-                if viewModel.episodes.isNotEmpty {
-                    itemsSection(title: L10n.episodes, keyPath: \.episodes, posterType: searchPosterType)
+                if let episodes = viewModel.items[.episode], episodes.isNotEmpty {
+                    itemsSection(
+                        title: L10n.episodes,
+                        type: .episode,
+                        items: episodes,
+                        posterType: searchPosterType
+                    )
                 }
 
-                if viewModel.programs.isNotEmpty {
-                    itemsSection(title: L10n.programs, keyPath: \.programs, posterType: .landscape)
+                if let musicVideos = viewModel.items[.musicVideo], musicVideos.isNotEmpty {
+                    itemsSection(
+                        title: L10n.musicVideos,
+                        type: .musicVideo,
+                        items: musicVideos,
+                        posterType: .landscape
+                    )
                 }
 
-                if viewModel.channels.isNotEmpty {
-                    itemsSection(title: L10n.channels, keyPath: \.channels, posterType: .portrait)
+                if let videos = viewModel.items[.video], videos.isNotEmpty {
+                    itemsSection(
+                        title: L10n.videos,
+                        type: .video,
+                        items: videos,
+                        posterType: .landscape
+                    )
                 }
 
-                if viewModel.people.isNotEmpty {
-                    itemsSection(title: L10n.people, keyPath: \.people, posterType: .portrait)
+                if let programs = viewModel.items[.program], programs.isNotEmpty {
+                    itemsSection(
+                        title: L10n.programs,
+                        type: .program,
+                        items: programs,
+                        posterType: .landscape
+                    )
+                }
+
+                if let channels = viewModel.items[.tvChannel], channels.isNotEmpty {
+                    itemsSection(
+                        title: L10n.channels,
+                        type: .tvChannel,
+                        items: channels,
+                        posterType: .square
+                    )
+                }
+
+                if let musicArtists = viewModel.items[.musicArtist], musicArtists.isNotEmpty {
+                    itemsSection(
+                        title: L10n.artists,
+                        type: .musicArtist,
+                        items: musicArtists,
+                        posterType: .portrait
+                    )
+                }
+
+                if let people = viewModel.items[.person], people.isNotEmpty {
+                    itemsSection(
+                        title: L10n.people,
+                        type: .person,
+                        items: people,
+                        posterType: .portrait
+                    )
                 }
             }
+            .edgePadding(.vertical)
         }
     }
 
     private func select(_ item: BaseItemDto) {
         switch item.type {
-        case .program:
-            router.route(to: .liveVideoPlayer(manager: LiveVideoPlayerManager(program: item)))
-        case .tvChannel:
-            guard let mediaSource = item.mediaSources?.first else { return }
-            router.route(
-                to: .liveVideoPlayer(
-                    manager: LiveVideoPlayerManager(
-                        item: item,
-                        mediaSource: mediaSource
-                    )
-                )
-            )
+        case .program, .tvChannel:
+            let provider = item.getPlaybackItemProvider(userSession: viewModel.userSession)
+            router.route(to: .videoPlayer(provider: provider))
         default:
             router.route(to: .item(item: item))
         }
@@ -94,13 +148,14 @@ struct SearchView: View {
     @ViewBuilder
     private func itemsSection(
         title: String,
-        keyPath: KeyPath<SearchViewModel, [BaseItemDto]>,
+        type: BaseItemKind,
+        items: [BaseItemDto],
         posterType: PosterDisplayType
     ) -> some View {
         PosterHStack(
             title: title,
             type: posterType,
-            items: viewModel[keyPath: keyPath],
+            items: items,
             action: select
         )
     }
@@ -108,30 +163,34 @@ struct SearchView: View {
     var body: some View {
         ZStack {
             switch viewModel.state {
+            case .error:
+                viewModel.error.map {
+                    ErrorView(error: $0)
+                }
             case .initial:
-                suggestionsView
-            case .content:
                 if viewModel.hasNoResults {
-                    L10n.noResults.text
+                    if viewModel.canSearch {
+                        Text(L10n.noResults)
+                    } else {
+                        suggestionsView
+                    }
                 } else {
                     resultsView
                 }
-            case let .error(error):
-                ErrorView(error: error)
-                    .onRetry {
-                        viewModel.send(.search(query: searchQuery))
-                    }
             case .searching:
                 ProgressView()
             }
         }
         .animation(.linear(duration: 0.1), value: viewModel.state)
         .ignoresSafeArea(edges: [.bottom, .horizontal])
+        .refreshable {
+            viewModel.search(query: searchQuery)
+        }
         .onFirstAppear {
-            viewModel.send(.getSuggestions)
+            viewModel.getSuggestions()
         }
         .onChange(of: searchQuery) { _, newValue in
-            viewModel.send(.search(query: newValue))
+            viewModel.search(query: newValue)
         }
         .searchable(text: $searchQuery, prompt: L10n.search)
     }

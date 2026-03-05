@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import CollectionHStack
@@ -23,14 +23,14 @@ struct PosterHStack<Element: Poster, Data: Collection>: View where Data.Element 
 
     private var layout: CollectionHStackLayout {
         if UIDevice.isPhone {
-            return .grid(
-                columns: type == .portrait ? 3 : 2,
+            .grid(
+                columns: type == .landscape ? 2 : 3,
                 rows: 1,
                 columnTrailingInset: 0
             )
         } else {
-            return .minimumWidth(
-                columnWidth: type == .portrait ? 140 : 220,
+            .minimumWidth(
+                columnWidth: type == .landscape ? 220 : 140,
                 rows: 1
             )
         }

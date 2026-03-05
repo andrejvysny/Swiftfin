@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Defaults
@@ -11,9 +11,9 @@ import SwiftUI
 
 struct VideoPlayerSettingsView: View {
 
-    @Default(.VideoPlayer.jumpBackwardLength)
+    @Default(.VideoPlayer.jumpBackwardInterval)
     private var jumpBackwardLength
-    @Default(.VideoPlayer.jumpForwardLength)
+    @Default(.VideoPlayer.jumpForwardInterval)
     private var jumpForwardLength
     @Default(.VideoPlayer.resumeOffset)
     private var resumeOffset
@@ -28,19 +28,17 @@ struct VideoPlayerSettingsView: View {
                 router.route(to: .gestureSettings)
             }
 
-            CaseIterablePicker(L10n.jumpBackwardLength, selection: $jumpBackwardLength)
-
-            CaseIterablePicker(L10n.jumpForwardLength, selection: $jumpForwardLength)
+            Section(L10n.buttons) {
+                JumpIntervalPicker(L10n.jumpBackwardLength, selection: $jumpBackwardLength)
+                JumpIntervalPicker(L10n.jumpForwardLength, selection: $jumpForwardLength)
+            }
 
             Section {
-
-                BasicStepper(
-                    L10n.resumeOffset,
-                    value: $resumeOffset,
-                    range: 0 ... 30,
-                    step: 1,
-                    formatter: SecondFormatter()
-                )
+                Stepper(value: $resumeOffset, in: 0 ... 30, step: 1) {
+                    LabeledContent(L10n.resumeOffset) {
+                        Text(resumeOffset, format: SecondFormatter())
+                    }
+                }
             } footer: {
                 Text(L10n.resumeOffsetDescription)
             }
@@ -52,9 +50,7 @@ struct VideoPlayerSettingsView: View {
             SubtitleSection()
 
             TimestampSection()
-
-            TransitionSection()
         }
-        .navigationTitle(L10n.videoPlayer)
+        .navigationTitle(L10n.videoPlayer.localizedCapitalized)
     }
 }

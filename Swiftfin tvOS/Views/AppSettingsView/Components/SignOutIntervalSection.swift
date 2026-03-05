@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Defaults
@@ -39,7 +39,7 @@ extension AppSettingsView {
                 if signOutOnBackground {
                     ChevronButton(
                         L10n.duration,
-                        subtitle: Text(backgroundSignOutInterval, format: .hourMinute)
+                        subtitle: Text(Duration.seconds(backgroundSignOutInterval), format: .hourMinuteAbbreviated)
                     ) {
                         router.route(to: .hourPicker)
                     }

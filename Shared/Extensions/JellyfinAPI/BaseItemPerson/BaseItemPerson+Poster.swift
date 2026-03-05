@@ -3,15 +3,19 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Factory
 import Foundation
 import JellyfinAPI
-import UIKit
+import SwiftUI
 
 extension BaseItemPerson: Poster {
+
+    var preferredPosterDisplayType: PosterDisplayType {
+        .portrait
+    }
 
     var unwrappedIDHashOrZero: Int {
         id?.hashValue ?? 0
@@ -36,7 +40,7 @@ extension BaseItemPerson: Poster {
         let imageRequestParameters = Paths.GetItemImageParameters(
             maxWidth: scaleWidth ?? Int(maxWidth),
             quality: quality,
-            tag: primaryImageTag,
+            tag: primaryImageTag
         )
 
         let imageRequest = Paths.getItemImage(
@@ -52,5 +56,9 @@ extension BaseItemPerson: Poster {
             url: url,
             blurHash: blurHash
         )]
+    }
+
+    func transform(image: Image) -> some View {
+        image
     }
 }

@@ -3,59 +3,48 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Combine
 import Foundation
 import JellyfinAPI
 
-final class RefreshMetadataViewModel: ViewModel, Stateful, Eventful {
+@MainActor
+@Stateful
+final class RefreshMetadataViewModel: ViewModel {
 
-    // MARK: - Events
-
-    enum Event: Equatable {
-        case error(JellyfinAPIError)
-    }
-
-    // MARK: - Action
-
-    enum Action: Equatable {
+    @CasePathable
+    enum Action {
         case refreshMetadata(
             metadataRefreshMode: MetadataRefreshMode,
             imageRefreshMode: MetadataRefreshMode,
             replaceMetadata: Bool,
-            replaceImages: Bool
+            replaceImages: Bool,
+            regenerateTrickplay: Bool
         )
+
+        var transition: Transition {
+            .loop(.refreshing)
+        }
     }
 
-    // MARK: States
-
-    enum State: Hashable {
-        case initial
+    enum Event {
+        case error
         case refreshing
     }
 
-    @Published
-    var state: State = .initial
+    enum State {
+        case initial
+        case refreshing
+    }
 
     // MARK: - Published Items
 
     @Published
     private(set) var progress: Double = 0.0
-    @Published
+
     private var item: BaseItemDto
-
-    // MARK: - Event Objects
-
-    private var itemTask: AnyCancellable?
-    private var eventSubject = PassthroughSubject<Event, Never>()
-
-    var events: AnyPublisher<Event, Never> {
-        eventSubject
-            .receive(on: RunLoop.main)
-            .eraseToAnyPublisher()
-    }
 
     // MARK: - Init
 
@@ -64,53 +53,15 @@ final class RefreshMetadataViewModel: ViewModel, Stateful, Eventful {
         super.init()
     }
 
-    // MARK: - Respond
-
-    func respond(to action: Action) -> State {
-        switch action {
-        case let .refreshMetadata(metadataRefreshMode, imageRefreshMode, replaceMetadata, replaceImages):
-            itemTask?.cancel()
-
-            itemTask = Task { [weak self] in
-                guard let self else { return }
-                do {
-                    await MainActor.run {
-                        self.state = .refreshing
-                    }
-
-                    try await self.refreshMetadata(
-                        metadataRefreshMode: metadataRefreshMode,
-                        imageRefreshMode: imageRefreshMode,
-                        replaceMetadata: replaceMetadata,
-                        replaceImages: replaceImages
-                    )
-
-                    await MainActor.run {
-                        self.state = .initial
-                    }
-
-                } catch {
-                    guard !Task.isCancelled else { return }
-
-                    let apiError = JellyfinAPIError(error.localizedDescription)
-                    await MainActor.run {
-                        self.eventSubject.send(.error(apiError))
-                    }
-                }
-            }
-            .asAnyCancellable()
-
-            return state
-        }
-    }
-
     // MARK: - Metadata Refresh Logic
 
-    private func refreshMetadata(
-        metadataRefreshMode: MetadataRefreshMode,
-        imageRefreshMode: MetadataRefreshMode,
-        replaceMetadata: Bool = false,
-        replaceImages: Bool = false
+    @Function(\Action.Cases.refreshMetadata)
+    private func _refreshMetadata(
+        _ metadataRefreshMode: MetadataRefreshMode,
+        _ imageRefreshMode: MetadataRefreshMode,
+        _ replaceMetadata: Bool = false,
+        _ replaceImages: Bool = false,
+        _ regenerateTrickplay: Bool = false
     ) async throws {
         guard let itemId = item.id else { return }
 
@@ -119,6 +70,7 @@ final class RefreshMetadataViewModel: ViewModel, Stateful, Eventful {
         parameters.imageRefreshMode = imageRefreshMode
         parameters.isReplaceAllMetadata = replaceMetadata
         parameters.isReplaceAllImages = replaceImages
+        parameters.isRegenerateTrickplay = regenerateTrickplay
 
         let request = Paths.refreshItem(
             itemID: itemId,
@@ -126,34 +78,30 @@ final class RefreshMetadataViewModel: ViewModel, Stateful, Eventful {
         )
         _ = try await userSession.client.send(request)
 
+        events.send(.refreshing)
+        // TODO: Remove this call when we have a WebSocket
         try await self.refreshItem()
     }
 
     // MARK: - Refresh Item After Request Queued
 
+    // TODO: Remove this func when we have a WebSocket
     private func refreshItem() async throws {
-        guard let itemId = item.id else { return }
-
         try await pollRefreshProgress()
 
-        let request = Paths.getItem(
-            itemID: itemId,
-            userID: userSession.user.id
-        )
-        let response = try await userSession.client.send(request)
+        // TODO: Call only this func via a Notification when we have a WebSocket
+        // - We might be able to just get the full item/changes from the WebSocket
+        let newItem = try await item.getFullItem(userSession: userSession)
 
-        await MainActor.run {
-            self.item = response.value
-            self.progress = 0.0
+        self.item = newItem
+        self.progress = 0.0
 
-            Notifications[.itemMetadataDidChange].post(self.item)
-        }
+        Notifications[.itemMetadataDidChange].post(newItem)
     }
 
     // MARK: - Poll Progress
 
-    // TODO: Find a way to actually check refresh progress.
-    // - Will require the WebSocket to be implemented first.
+    // TODO: Remove this func when we have a WebSocket
     private func pollRefreshProgress() async throws {
         let totalDuration: Double = 5.0
         let interval: Double = 0.05
@@ -164,9 +112,7 @@ final class RefreshMetadataViewModel: ViewModel, Stateful, Eventful {
             try await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
 
             let currentProgress = Double(i) / Double(steps)
-            await MainActor.run {
-                self.progress = currentProgress
-            }
+            self.progress = currentProgress
         }
     }
 }

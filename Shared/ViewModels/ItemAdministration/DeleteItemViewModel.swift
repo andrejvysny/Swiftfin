@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Combine
@@ -16,7 +16,7 @@ final class DeleteItemViewModel: ViewModel, Stateful, Eventful {
 
     enum Event: Equatable {
         case deleted
-        case error(JellyfinAPIError)
+        case error(ErrorMessage)
     }
 
     // MARK: - Action
@@ -29,7 +29,7 @@ final class DeleteItemViewModel: ViewModel, Stateful, Eventful {
 
     enum State: Hashable {
         case initial
-        case error(JellyfinAPIError)
+        case error(ErrorMessage)
     }
 
     @Published
@@ -67,7 +67,7 @@ final class DeleteItemViewModel: ViewModel, Stateful, Eventful {
             deleteTask?.cancel()
 
             deleteTask = Task { [weak self] in
-                guard let self = self else { return }
+                guard let self else { return }
                 do {
                     try await self.deleteItem()
                     await MainActor.run {
@@ -77,8 +77,8 @@ final class DeleteItemViewModel: ViewModel, Stateful, Eventful {
                 } catch {
                     guard !Task.isCancelled else { return }
                     await MainActor.run {
-                        self.state = .error(JellyfinAPIError(error.localizedDescription))
-                        self.eventSubject.send(.error(JellyfinAPIError(error.localizedDescription)))
+                        self.state = .error(ErrorMessage(error.localizedDescription))
+                        self.eventSubject.send(.error(ErrorMessage(error.localizedDescription)))
                     }
                 }
             }
@@ -92,7 +92,7 @@ final class DeleteItemViewModel: ViewModel, Stateful, Eventful {
 
     private func deleteItem() async throws {
         guard let item, let itemID = item.id else {
-            throw JellyfinAPIError(L10n.unknownError)
+            throw ErrorMessage(L10n.unknownError)
         }
 
         let request = Paths.deleteItem(itemID: itemID)

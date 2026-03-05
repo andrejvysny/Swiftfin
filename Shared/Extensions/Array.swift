@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Foundation
@@ -14,11 +14,11 @@ extension Array {
         self + [element]
     }
 
-    func appending(_ element: Element, if condition: Bool) -> [Element] {
+    func appending(_ element: @autoclosure () -> Element, if condition: Bool) -> [Element] {
         if condition {
-            return self + [element]
+            self + [element()]
         } else {
-            return self
+            self
         }
     }
 
@@ -34,11 +34,11 @@ extension Array {
         [element] + self
     }
 
-    func prepending(_ element: Element, if condition: Bool) -> [Element] {
+    func prepending(_ element: @autoclosure () -> Element, if condition: Bool) -> [Element] {
         if condition {
-            return [element] + self
+            [element()] + self
         } else {
-            return self
+            self
         }
     }
 
@@ -57,7 +57,21 @@ extension Array {
 
 extension Array where Element: Equatable {
 
+    mutating func removeFirst(equalTo element: Element) {
+        if let index = firstIndex(of: element) {
+            remove(at: index)
+        }
+    }
+
     mutating func removeAll(equalTo element: Element) {
         removeAll { $0 == element }
+    }
+
+    mutating func toggle(_ element: Element) {
+        if contains(element) {
+            removeAll(equalTo: element)
+        } else {
+            append(element)
+        }
     }
 }

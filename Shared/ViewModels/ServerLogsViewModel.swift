@@ -3,60 +3,40 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
-import Foundation
 import JellyfinAPI
 import OrderedCollections
 import SwiftUI
 
-final class ServerLogsViewModel: ViewModel, Stateful {
+@MainActor
+@Stateful
+final class ServerLogsViewModel: ViewModel {
 
-    enum Action: Equatable {
+    @CasePathable
+    enum Action {
         case getLogs
+
+        var transition: Transition {
+            .loop(.refreshing)
+        }
     }
 
-    enum State: Hashable {
-        case content
+    enum State {
         case initial
-        case error(JellyfinAPIError)
+        case error
+        case refreshing
     }
 
     @Published
     private(set) var logs: OrderedSet<LogFile> = []
-    @Published
-    var state: State = .initial
 
-    func respond(to action: Action) -> State {
-        switch action {
-        case .getLogs:
-            cancellables.removeAll()
-
-            Task {
-                do {
-                    let newLogs = try await getLogs()
-
-                    await MainActor.run {
-                        self.logs = newLogs
-                        self.state = .content
-                    }
-                } catch {
-                    await MainActor.run {
-                        self.state = .error(.init(error.localizedDescription))
-                    }
-                }
-            }
-            .store(in: &cancellables)
-
-            return .initial
-        }
-    }
-
-    private func getLogs() async throws -> OrderedSet<LogFile> {
+    @Function(\Action.Cases.getLogs)
+    private func _getLogs() async throws {
         let request = Paths.getServerLogs
         let response = try await userSession.client.send(request)
-
-        return OrderedSet(response.value)
+        let newLogs = OrderedSet(response.value)
+        self.logs = newLogs
     }
 }

@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Defaults
@@ -53,7 +53,7 @@ struct ServerUserParentalRatingView: View {
 
             blockUnratedItemsView
         }
-        .navigationTitle(L10n.parentalRating.localizedCapitalized)
+        .navigationTitle(L10n.parentalRatings.localizedCapitalized)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarCloseButton {
             router.dismiss()
@@ -72,7 +72,7 @@ struct ServerUserParentalRatingView: View {
             .disabled(viewModel.user.policy == tempPolicy)
         }
         .onFirstAppear {
-            parentalRatingsViewModel.send(.refresh)
+            parentalRatingsViewModel.refresh()
         }
         .onReceive(viewModel.events) { event in
             switch event {

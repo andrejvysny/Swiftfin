@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Factory
@@ -13,17 +13,6 @@ extension Logger {
 
     static func swiftfin() -> Logger {
         Logger(label: "org.jellyfin.swiftfin")
-    }
-}
-
-extension Container {
-
-    @available(*, deprecated, message: "Use `Logger.swiftfin()` instances instead")
-    var logService: Factory<Logger> {
-        self {
-            Logger(label: "org.jellyfin.swiftfin")
-        }
-        .unique
     }
 }
 
@@ -50,7 +39,15 @@ struct SwiftfinConsoleHandler: LogHandler {
         function: String,
         line: UInt
     ) {
-        print("[\(level.emoji) \(level.rawValue.capitalized)] \(file.shortFileName)#\(line):\(function) \(message)")
+        let line = "[\(level.emoji) \(level.rawValue.capitalized)] \(file.shortFileName)#\(line):\(function) \(message)"
+        let meta = (metadata ?? [:]).merging(self.metadata) { _, new in new }
+        let metadataString = meta.map { "\t- \($0): \($1)" }.joined(separator: "\n")
+
+        print(line)
+
+        if metadataString.isNotEmpty {
+            print(metadataString)
+        }
     }
 }
 
@@ -58,19 +55,19 @@ extension Logger.Level {
     var emoji: String {
         switch self {
         case .trace:
-            return "🟣"
+            "🟣"
         case .debug:
-            return "🔵"
+            "🔵"
         case .info:
-            return "🟢"
+            "🟢"
         case .notice:
-            return "🟠"
+            "🟠"
         case .warning:
-            return "🟡"
+            "🟡"
         case .error:
-            return "🔴"
+            "🔴"
         case .critical:
-            return "💥"
+            "💥"
         }
     }
 }

@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Combine
@@ -26,18 +26,21 @@ extension EditMetadataView {
 
                 ChevronButton(
                     L10n.critics,
-                    subtitle: item.criticRating.map { "\($0)" } ?? .emptyDash,
-                    description: L10n.ratingDescription(L10n.critics)
+                    subtitle: item.criticRating
+                        .map { FloatingPointFormatStyle<Float>.number
+                            .precision(.fractionLength(0 ... 2)).format($0)
+                        } ?? .emptyDash,
+                    description: L10n.criticRatingDescription
                 ) {
                     TextField(
                         L10n.rating,
                         value: $item.criticRating,
-                        format: .number.precision(.fractionLength(1))
+                        format: .number
                     )
                     .keyboardType(.decimalPad)
                     .onChange(of: item.criticRating) { _ in
                         if let rating = item.criticRating {
-                            item.criticRating = min(max(rating, 0), 10)
+                            item.criticRating = min(max(rating, 0), 100)
                         }
                     }
                 }
@@ -46,13 +49,16 @@ extension EditMetadataView {
 
                 ChevronButton(
                     L10n.community,
-                    subtitle: item.communityRating.map { "\($0)" } ?? .emptyDash,
-                    description: L10n.ratingDescription(L10n.community)
+                    subtitle: item.communityRating
+                        .map { FloatingPointFormatStyle<Float>.number
+                            .precision(.fractionLength(0 ... 2)).format($0)
+                        } ?? .emptyDash,
+                    description: L10n.communityRatingDescription
                 ) {
                     TextField(
                         L10n.rating,
                         value: $item.communityRating,
-                        format: .number.precision(.fractionLength(1))
+                        format: .number
                     )
                     .keyboardType(.decimalPad)
                     .onChange(of: item.communityRating) { _ in

@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Defaults
@@ -11,64 +11,32 @@ import Foundation
 import JellyfinAPI
 import OrderedCollections
 
-final class MediaViewModel: ViewModel, Stateful {
+@MainActor
+@Stateful
+final class MediaViewModel: ViewModel {
 
-    // MARK: Action
-
-    enum Action: Equatable {
-        case error(JellyfinAPIError)
+    @CasePathable
+    enum Action {
         case refresh
+
+        var transition: Transition {
+            .loop(.refreshing)
+        }
     }
 
-    // MARK: State
-
-    enum State: Hashable {
-        case content
-        case error(JellyfinAPIError)
+    enum State {
+        case error
         case initial
         case refreshing
     }
 
     @Published
-    var mediaItems: OrderedSet<MediaType> = []
+    private(set) var mediaItems: OrderedSet<MediaType> = []
 
-    @Published
-    var backgroundStates: Set<BackgroundState> = []
+    @Function(\Action.Cases.refresh)
+    private func _refresh() async throws {
 
-    @Published
-    var state: State = .initial
-
-    func respond(to action: Action) -> State {
-        switch action {
-        case let .error(error):
-            return .error(error)
-        case .refresh:
-            cancellables.removeAll()
-
-            Task {
-                do {
-                    try await refresh()
-
-                    await MainActor.run {
-                        self.state = .content
-                    }
-                } catch {
-                    await MainActor.run {
-                        self.state = .error(.init(error.localizedDescription))
-                    }
-                }
-            }
-            .store(in: &cancellables)
-
-            return .refreshing
-        }
-    }
-
-    private func refresh() async throws {
-
-        await MainActor.run {
-            mediaItems.removeAll()
-        }
+        mediaItems.removeAll()
 
         let media: [MediaType] = try await getUserViews()
             .compactMap { userView in
@@ -80,9 +48,7 @@ final class MediaViewModel: ViewModel, Stateful {
             }
             .prepending(.favorites, if: Defaults[.Customization.Library.showFavorites])
 
-        await MainActor.run {
-            mediaItems.elements = media
-        }
+        mediaItems.elements = media
     }
 
     private func getUserViews() async throws -> [BaseItemDto] {
@@ -95,8 +61,9 @@ final class MediaViewModel: ViewModel, Stateful {
 
         // folders has `type = UserView`, but we manually
         // force it to `folders` for better view handling
-        let supportedUserViews = try await (userViews.value.items ?? [])
-            .intersection(CollectionType.supportedCases, using: \.collectionType)
+        return try await (userViews.value.items ?? [])
+            .coalesced(property: \.collectionType, with: .folders)
+            .intersecting(CollectionType.supportedCases, using: \.collectionType)
             .subtracting(excludedLibraryIDs, using: \.id)
             .map { item in
 
@@ -106,8 +73,6 @@ final class MediaViewModel: ViewModel, Stateful {
 
                 return item
             }
-
-        return supportedUserViews
     }
 
     private func getExcludedLibraries() async throws -> [String] {
@@ -145,7 +110,7 @@ final class MediaViewModel: ViewModel, Stateful {
         parameters.limit = 3
         parameters.isRecursive = true
         parameters.parentID = parentID
-        parameters.includeItemTypes = [.movie, .series, .boxSet]
+        parameters.includeItemTypes = BaseItemKind.supportedCases
         parameters.filters = filters
         parameters.sortBy = [ItemSortBy.random.rawValue]
 
@@ -153,6 +118,6 @@ final class MediaViewModel: ViewModel, Stateful {
         let response = try await userSession.client.send(request)
 
         return (response.value.items ?? [])
-            .map { $0.imageSource(.backdrop, maxWidth: 200) }
+            .flatMap { $0.landscapeImageSources(maxWidth: 200) }
     }
 }

@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Foundation
@@ -13,7 +13,7 @@ import UIKit
 
 extension JellyfinClient {
 
-    func fullURL<T>(with request: Request<T>, queryAPIKey: Bool = false) -> URL? {
+    func fullURL(with request: Request<some Any>, queryAPIKey: Bool = false) -> URL? {
 
         guard let path = request.url?.path else { return configuration.url }
         guard let fullPath = fullURL(with: path) else { return nil }
@@ -38,7 +38,10 @@ extension JellyfinClient {
 
 extension JellyfinClient.Configuration {
 
-    static func swiftfinConfiguration(url: URL) -> Self {
+    static func swiftfinConfiguration(
+        url: URL,
+        accessToken: String? = nil
+    ) -> Self {
 
         let client = "Swiftfin \(UIDevice.platform)"
         let deviceName = UIDevice.current.name
@@ -51,6 +54,7 @@ extension JellyfinClient.Configuration {
 
         return .init(
             url: url,
+            accessToken: accessToken,
             client: client,
             deviceName: deviceName,
             deviceID: deviceID,

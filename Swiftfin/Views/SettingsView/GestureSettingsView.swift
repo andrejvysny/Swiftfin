@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Defaults
@@ -16,45 +16,53 @@ import SwiftUI
 
 struct GestureSettingsView: View {
 
-    @Default(.VideoPlayer.Gesture.horizontalPanGesture)
-    private var horizontalPanGesture
-    @Default(.VideoPlayer.Gesture.horizontalSwipeGesture)
-    private var horizontalSwipeGesture
-    @Default(.VideoPlayer.Gesture.longPressGesture)
+    @Default(.VideoPlayer.Gesture.horizontalPanAction)
+    private var horizontalPanAction
+    @Default(.VideoPlayer.Gesture.horizontalSwipeAction)
+    private var horizontalSwipeAction
+    @Default(.VideoPlayer.Gesture.longPressAction)
     private var longPressGesture
+    @Default(.VideoPlayer.Gesture.longPressSpeedMultiplier)
+    private var longPressSpeedMultiplier
     @Default(.VideoPlayer.Gesture.multiTapGesture)
     private var multiTapGesture
     @Default(.VideoPlayer.Gesture.doubleTouchGesture)
     private var doubleTouchGesture
     @Default(.VideoPlayer.Gesture.pinchGesture)
     private var pinchGesture
-    @Default(.VideoPlayer.Gesture.verticalPanGestureLeft)
-    private var verticalPanGestureLeft
-    @Default(.VideoPlayer.Gesture.verticalPanGestureRight)
-    private var verticalPanGestureRight
+    @Default(.VideoPlayer.Gesture.verticalPanLeftAction)
+    private var verticalPanLeftAction
+    @Default(.VideoPlayer.Gesture.verticalPanRightAction)
+    private var verticalPanRightAction
 
     var body: some View {
         Form {
 
             Section {
 
-                CaseIterablePicker(L10n.horizontalPan, selection: $horizontalPanGesture)
-                    .disabled(horizontalSwipeGesture != .none && horizontalPanGesture == .none)
+                // TODO: make toggle sections
 
-                CaseIterablePicker(L10n.horizontalSwipe, selection: $horizontalSwipeGesture)
-                    .disabled(horizontalPanGesture != .none && horizontalSwipeGesture == .none)
+                Picker(L10n.horizontalPan, selection: $horizontalPanAction)
+                    .disabled(horizontalSwipeAction != .none)
 
-                CaseIterablePicker(L10n.longPress, selection: $longPressGesture)
+                Picker(L10n.horizontalSwipe, selection: $horizontalSwipeAction)
+                    .disabled(horizontalPanAction != .none)
 
-                CaseIterablePicker(L10n.multiTap, selection: $multiTapGesture)
+                Picker(L10n.longPress, selection: $longPressGesture)
 
-                CaseIterablePicker(L10n.doubleTouch, selection: $doubleTouchGesture)
+                if longPressGesture == .playbackSpeed {
+                    PlaybackSpeedPicker(L10n.playbackSpeed, selection: $longPressSpeedMultiplier)
+                }
 
-                CaseIterablePicker(L10n.pinch, selection: $pinchGesture)
+                Picker(L10n.multiTap, selection: $multiTapGesture)
 
-                CaseIterablePicker(L10n.leftVerticalPan, selection: $verticalPanGestureLeft)
+                Picker(L10n.doubleTouch, selection: $doubleTouchGesture)
 
-                CaseIterablePicker(L10n.rightVerticalPan, selection: $verticalPanGestureRight)
+                Picker(L10n.pinch, selection: $pinchGesture)
+
+                Picker(L10n.leftVerticalPan, selection: $verticalPanLeftAction)
+
+                Picker(L10n.rightVerticalPan, selection: $verticalPanRightAction)
             }
         }
         .navigationTitle(L10n.gestures)

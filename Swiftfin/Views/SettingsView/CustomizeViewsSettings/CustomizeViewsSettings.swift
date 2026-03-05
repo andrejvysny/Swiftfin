@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Defaults
@@ -72,14 +72,14 @@ struct CustomizeViewsSettings: View {
 
             if UIDevice.isPhone {
                 Section {
-                    CaseIterablePicker(L10n.items, selection: $itemViewType)
+                    Picker(L10n.items, selection: $itemViewType)
                 }
 
                 if itemViewType == .cinematic {
                     Section {
                         Toggle(L10n.usePrimaryImage, isOn: $cinematicItemViewTypeUsePrimaryImage)
                     } footer: {
-                        L10n.usePrimaryImageDescription.text
+                        Text(L10n.usePrimaryImageDescription)
                     }
                 }
             }
@@ -90,7 +90,7 @@ struct CustomizeViewsSettings: View {
                 Toggle(L10n.randomImage, isOn: $libraryRandomImage)
 
             } header: {
-                L10n.library.text
+                Text(L10n.library)
             }
 
             Section {
@@ -98,7 +98,7 @@ struct CustomizeViewsSettings: View {
                 Toggle(L10n.letterPicker, isOn: $letterPickerEnabled)
 
                 if letterPickerEnabled {
-                    CaseIterablePicker(
+                    Picker(
                         L10n.orientation,
                         selection: $letterPickerOrientation
                     )
@@ -113,14 +113,14 @@ struct CustomizeViewsSettings: View {
                 }
 
             } header: {
-                L10n.filters.text
+                Text(L10n.filters)
             }
 
             Section {
                 Toggle(L10n.showMissingSeasons, isOn: $shouldShowMissingSeasons)
                 Toggle(L10n.showMissingEpisodes, isOn: $shouldShowMissingEpisodes)
             } header: {
-                L10n.missingItems.text
+                Text(L10n.missingItems)
             }
 
             Section(L10n.posters) {
@@ -131,27 +131,46 @@ struct CustomizeViewsSettings: View {
 
                 Toggle(L10n.showPosterLabels, isOn: $showPosterLabels)
 
-                CaseIterablePicker(L10n.next, selection: $nextUpPosterType)
+                Picker(
+                    L10n.next,
+                    selection: $nextUpPosterType,
+                    onlySupported: true
+                )
 
-                CaseIterablePicker(L10n.latestWithString(L10n.library), selection: $latestInLibraryPosterType)
+                Picker(
+                    L10n.latestWithString(L10n.library),
+                    selection: $latestInLibraryPosterType,
+                    onlySupported: true
+                )
 
-                CaseIterablePicker(L10n.recommended, selection: $similarPosterType)
+                Picker(
+                    L10n.recommended,
+                    selection: $similarPosterType,
+                    onlySupported: true
+                )
 
-                CaseIterablePicker(L10n.search, selection: $searchPosterType)
+                Picker(
+                    L10n.search,
+                    selection: $searchPosterType,
+                    onlySupported: true
+                )
             }
 
             Section(L10n.libraries) {
-                CaseIterablePicker(L10n.library, selection: $libraryDisplayType)
+                Picker(L10n.library, selection: $libraryDisplayType)
 
-                CaseIterablePicker(L10n.posters, selection: $libraryPosterType)
+                Picker(
+                    L10n.posters,
+                    selection: $libraryPosterType,
+                    onlySupported: true
+                )
 
                 if libraryDisplayType == .list, UIDevice.isPad {
-                    BasicStepper(
-                        L10n.columns,
-                        value: $listColumnCount,
-                        range: 1 ... 4,
-                        step: 1
-                    )
+                    Stepper(value: $listColumnCount, in: 1 ... 4, step: 1) {
+                        LabeledContent(L10n.columns) {
+                            Text(listColumnCount.description)
+                        }
+                    }
                 }
             }
 
@@ -175,7 +194,7 @@ struct CustomizeViewsSettings: View {
                 Toggle(L10n.seriesBackdrop, isOn: $useSeriesLandscapeBackdrop)
             } header: {
                 // TODO: think of a better name
-                L10n.episodeLandscapePoster.text
+                Text(L10n.episodeLandscapePoster)
             }
         }
         .navigationTitle(L10n.customize)

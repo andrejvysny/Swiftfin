@@ -3,13 +3,14 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import CoreStore
 import Factory
 import Foundation
 import JellyfinAPI
+import Logging
 
 typealias AnyStoredData = SwiftfinStore.V2.AnyData
 typealias ServerModel = SwiftfinStore.V2.StoredServer
@@ -21,7 +22,9 @@ typealias UserState = SwiftfinStore.State.User
 // MARK: Namespaces
 
 extension Container {
-    var dataStore: Factory<DataStack> { self { SwiftfinStore.dataStack }.singleton }
+    var dataStore: Factory<DataStack> {
+        self { SwiftfinStore.dataStack }.singleton
+    }
 }
 
 enum SwiftfinStore {
@@ -34,6 +37,8 @@ enum SwiftfinStore {
 
     /// Namespace for state objects
     enum State {}
+
+    private static let logger = Logger.swiftfin()
 }
 
 // MARK: dataStack
@@ -68,8 +73,8 @@ extension SwiftfinStore {
                 case .success:
                     continuation.resume()
                 case let .failure(error):
-                    Container.shared.logService().error("Failed creating datastack with: \(error.localizedDescription)")
-                    continuation.resume(throwing: JellyfinAPIError("Failed creating datastack with: \(error.localizedDescription)"))
+                    logger.error("Failed creating datastack with: \(error.localizedDescription)")
+                    continuation.resume(throwing: ErrorMessage("Failed creating datastack with: \(error.localizedDescription)"))
                 }
             }
         }

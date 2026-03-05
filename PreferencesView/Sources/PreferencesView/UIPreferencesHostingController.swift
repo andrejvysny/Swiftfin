@@ -3,14 +3,14 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import SwiftUI
 
 public class UIPreferencesHostingController: UIHostingController<AnyView> {
 
-    init<Content: View>(@ViewBuilder content: @escaping () -> Content) {
+    public init(@ViewBuilder content: @escaping () -> some View) {
         let box = Box()
         let rootView = AnyView(
             content()
@@ -83,16 +83,16 @@ public class UIPreferencesHostingController: UIHostingController<AnyView> {
 
     var _orientations: UIInterfaceOrientationMask = .all {
         didSet {
-            if #available(iOS 16, *) {
-                setNeedsUpdateOfSupportedInterfaceOrientations()
-            } else {
-                AppRotationUtility.lockOrientation(_orientations)
-            }
+            setNeedsUpdateOfSupportedInterfaceOrientations()
         }
     }
 
     override public var supportedInterfaceOrientations: UIInterfaceOrientationMask {
         _orientations
+    }
+
+    override public var shouldAutorotate: Bool {
+        true
     }
 
     // MARK: Defer Edges
@@ -114,7 +114,6 @@ public class UIPreferencesHostingController: UIHostingController<AnyView> {
     override public var prefersHomeIndicatorAutoHidden: Bool {
         _prefersHomeIndicatorAutoHidden
     }
-
     #endif
 
     #if os(tvOS)
@@ -141,27 +140,3 @@ public class UIPreferencesHostingController: UIHostingController<AnyView> {
     }
     #endif
 }
-
-// TODO: remove after iOS 15 support removed
-
-#if os(iOS)
-enum AppRotationUtility {
-
-    static func lockOrientation(_ orientationLock: UIInterfaceOrientationMask) {
-
-        guard UIDevice.current.userInterfaceIdiom == .phone else { return }
-
-        let rotateOrientation: UIInterfaceOrientation
-
-        switch orientationLock {
-        case .landscape:
-            rotateOrientation = .landscapeRight
-        default:
-            rotateOrientation = .portrait
-        }
-
-        UIDevice.current.setValue(rotateOrientation.rawValue, forKey: "orientation")
-        UINavigationController.attemptRotationToDeviceOrientation()
-    }
-}
-#endif

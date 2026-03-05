@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import CoreStore
@@ -68,6 +68,20 @@ extension UserState {
         UserPermissions(data.policy)
     }
 
+    var pin: String {
+        get {
+            guard let pin = Container.shared.keychainService().get("\(id)-pin") else {
+                assertionFailure("pin missing in keychain")
+                return ""
+            }
+
+            return pin
+        }
+        nonmutating set {
+            Container.shared.keychainService().set(newValue, forKey: "\(id)-pin")
+        }
+    }
+
     var pinHint: String {
         get {
             StoredValues[.User.pinHint(id: id)]
@@ -94,7 +108,7 @@ extension UserState {
     func delete() throws {
         try SwiftfinStore.dataStack.perform { transaction in
             guard let storedUser = try transaction.fetchOne(From<UserModel>().where(\.$id == id)) else {
-                throw JellyfinAPIError("Unable to find user to delete")
+                throw ErrorMessage("Unable to find user to delete")
             }
 
             let storedDataClause = AnyStoredData.fetchClause(ownerID: id)
@@ -146,14 +160,10 @@ extension UserState {
 
     // we will always crop to a square, so just use width
     func profileImageSource(
-        client: JellyfinClient,
-        maxWidth: CGFloat? = nil
+        client: JellyfinClient
     ) -> ImageSource {
-        let scaleWidth = maxWidth == nil ? nil : UIScreen.main.scale(maxWidth!)
-
         let parameters = Paths.GetUserImageParameters(
-            userID: id,
-            maxWidth: scaleWidth
+            userID: id
         )
         let request = Paths.getUserImage(parameters: parameters)
 

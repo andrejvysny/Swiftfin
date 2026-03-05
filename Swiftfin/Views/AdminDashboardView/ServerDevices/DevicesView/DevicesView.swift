@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Defaults
@@ -30,26 +30,26 @@ struct DevicesView: View {
     @StateObject
     private var viewModel = DevicesViewModel()
 
-    // MARK: - Body
-
     var body: some View {
         ZStack {
             switch viewModel.state {
-            case .content:
-                deviceListView
-            case let .error(error):
-                ErrorView(error: error)
-                    .onRetry {
-                        viewModel.send(.refresh)
-                    }
+            case .error:
+                viewModel.error.map {
+                    ErrorView(error: $0)
+                }
             case .initial:
-                DelayedProgressView()
+                contentView
+            case .refreshing:
+                ProgressView()
             }
         }
         .animation(.linear(duration: 0.2), value: viewModel.state)
         .navigationTitle(L10n.devices)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(isEditing)
+        .refreshable {
+            viewModel.refresh()
+        }
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 if isEditing {
@@ -73,7 +73,7 @@ struct DevicesView: View {
             }
         }
         .onFirstAppear {
-            viewModel.send(.refresh)
+            viewModel.refresh()
         }
         .confirmationDialog(
             L10n.delete,
@@ -98,12 +98,13 @@ struct DevicesView: View {
         } message: {
             Text(L10n.deleteDeviceSelfDeletion(viewModel.userSession.client.configuration.deviceName))
         }
+        .errorMessage($viewModel.error)
     }
 
     // MARK: - Device List View
 
     @ViewBuilder
-    private var deviceListView: some View {
+    private var contentView: some View {
         List {
             InsetGroupedListHeader(
                 L10n.devices,
@@ -132,7 +133,7 @@ struct DevicesView: View {
                                 selectedDevices.insert(id)
                             }
                         } else {
-                            router.route(to: .deviceDetails(device: device))
+                            router.route(to: .deviceDetails(device: device, viewModel: viewModel))
                         }
                     } onDelete: {
                         guard let id = device.id else { return }
@@ -154,7 +155,7 @@ struct DevicesView: View {
 
     @ViewBuilder
     private var navigationBarEditView: some View {
-        if viewModel.backgroundStates.contains(.refreshing) {
+        if viewModel.background.is(.refreshing) {
             ProgressView()
         } else {
             Button(isEditing ? L10n.cancel : L10n.edit) {
@@ -192,7 +193,7 @@ struct DevicesView: View {
         Button(L10n.cancel, role: .cancel) {}
 
         Button(L10n.confirm, role: .destructive) {
-            viewModel.send(.delete(ids: Array(selectedDevices)))
+            viewModel.delete(ids: selectedDevices)
             isEditing = false
             selectedDevices.removeAll()
         }
@@ -209,7 +210,7 @@ struct DevicesView: View {
                 if deviceToDelete == viewModel.userSession.client.configuration.deviceID {
                     isPresentingSelfDeleteError = true
                 } else {
-                    viewModel.send(.delete(ids: [deviceToDelete]))
+                    viewModel.delete(ids: [deviceToDelete])
                     selectedDevices.removeAll()
                 }
             }

@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Defaults
@@ -39,15 +39,15 @@ extension ItemView {
             if let seriesViewModel = viewModel as? SeriesItemViewModel,
                let seasonEpisodeLabel = seriesViewModel.playButtonItem?.seasonEpisodeLabel
             {
-                return seasonEpisodeLabel
+                seasonEpisodeLabel
 
                 /// Use a Play/Resume label for single Media Source items that are not Series
             } else if let playButtonLabel = viewModel.playButtonItem?.playButtonLabel {
-                return playButtonLabel
+                playButtonLabel
 
                 /// Fallback to a generic `Play` label
             } else {
-                return L10n.play
+                L10n.play
             }
         }
 
@@ -69,32 +69,29 @@ extension ItemView {
             Button {
                 play()
             } label: {
-                ZStack {
-                    Rectangle()
-                        .foregroundStyle(isEnabled ? accentColor : Color.secondarySystemFill)
-                        .cornerRadius(10)
+                HStack {
+                    Image(systemName: "play.fill")
 
-                    HStack {
-                        Image(systemName: "play.fill")
-                            .font(.system(size: 20))
+                    VStack {
+                        Text(title)
 
-                        VStack(alignment: .leading) {
-                            Text(title)
-                                .font(.callout)
-                                .fontWeight(.semibold)
-
-                            if let source {
-                                Marquee(source, speed: 40, delay: 3, fade: 5)
-                                    .font(.caption)
-                                    .fontWeight(.medium)
-                                    .frame(maxWidth: 175)
-                            }
+                        if let source {
+                            Marquee(source, speed: 40, delay: 3, fade: 5)
+                                .font(.caption)
+                                .fontWeight(.medium)
                         }
                     }
-                    .foregroundStyle(isEnabled ? accentColor.overlayColor : Color(UIColor.secondaryLabel))
-                    .padding(.horizontal, 5)
                 }
+                .padding(.horizontal, 20)
+                .font(.callout)
+                .fontWeight(.semibold)
             }
+            .buttonStyle(
+                .tintedMaterial(
+                    tint: accentColor,
+                    foregroundColor: accentColor.overlayColor
+                )
+            )
             .contextMenu {
                 if viewModel.playButtonItem?.userData?.playbackPositionTicks != 0 {
                     Button(L10n.playFromBeginning, systemImage: "gobackward") {
@@ -102,29 +99,42 @@ extension ItemView {
                     }
                 }
             }
-            .disabled(!isEnabled)
+            .isSelected(true)
+            .enabled(isEnabled)
         }
 
         // MARK: - Play Content
 
         private func play(fromBeginning: Bool = false) {
-            guard var playButtonItem = viewModel.playButtonItem,
+            guard let playButtonItem = viewModel.playButtonItem,
                   let selectedMediaSource = viewModel.selectedMediaSource
             else {
                 logger.error("Play selected with no item or media source")
                 return
             }
 
-            if fromBeginning {
-                playButtonItem.userData?.playbackPositionTicks = 0
+            let queue: (any MediaPlayerQueue)? = {
+                if playButtonItem.type == .episode {
+                    return EpisodeMediaPlayerQueue(episode: playButtonItem)
+                }
+                return nil
+            }()
+
+            let provider = MediaPlayerItemProvider(item: playButtonItem) { item in
+                try await MediaPlayerItem.build(
+                    for: item,
+                    mediaSource: selectedMediaSource
+                ) {
+                    if fromBeginning {
+                        $0.userData?.playbackPositionTicks = 0
+                    }
+                }
             }
 
             router.route(
                 to: .videoPlayer(
-                    manager: AutoVideoPlayerManager(
-                        item: playButtonItem,
-                        mediaSource: selectedMediaSource
-                    )
+                    provider: provider,
+                    queue: queue
                 )
             )
         }

@@ -3,10 +3,14 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
+import Factory
 import SwiftUI
+
+// TODO: move popup to router
+//       - or, make tab view environment object
 
 // TODO: fix weird tvOS icon rendering
 struct MainTabView: View {
@@ -24,7 +28,7 @@ struct MainTabView: View {
     private var tabCoordinator = TabCoordinator {
         TabItem.home
         TabItem.library(
-            title: L10n.tvShows,
+            title: L10n.tvShowsCapitalized,
             systemName: "tv",
             filters: .init(itemTypes: [.series])
         )

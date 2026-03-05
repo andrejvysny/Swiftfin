@@ -3,11 +3,12 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Combine
 import Defaults
+import Factory
 import Foundation
 import SwiftUI
 
@@ -33,6 +34,9 @@ extension SwiftfinApp {
 
             lastSignInUserIDCancellable = Task {
                 for await newValue in Defaults.updates(.lastSignedInUserID) {
+
+                    Container.shared.mediaPlayerManager.reset()
+
                     if case .signedIn = newValue {
                         setUserDefaultsObservation()
                     } else {
@@ -79,11 +83,9 @@ extension SwiftfinApp {
             splashScreenCancellable?.cancel()
 
             accentColorCancellable = Task {
-                for await newValue in Defaults.updates(.appAccentColor) {
-                    await MainActor.run {
-                        Defaults[.accentColor] = newValue
-                        UIApplication.shared.setAccentColor(newValue.uiColor)
-                    }
+                await MainActor.run {
+                    Defaults[.accentColor] = .jellyfinPurple
+                    UIApplication.shared.setAccentColor(Color.jellyfinPurple.uiColor)
                 }
             }
             .asAnyCancellable()

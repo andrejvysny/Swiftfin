@@ -3,17 +3,14 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
-import CoreData
 import CoreStore
 import Defaults
 import Factory
-import Foundation
 import JellyfinAPI
 import Pulse
-import UIKit
 
 final class UserSession {
 
@@ -29,10 +26,12 @@ final class UserSession {
         self.user = user
 
         let client = JellyfinClient(
-            configuration: .swiftfinConfiguration(url: server.currentURL),
+            configuration: .swiftfinConfiguration(
+                url: server.currentURL,
+                accessToken: user.accessToken
+            ),
             sessionConfiguration: .swiftfin,
-            sessionDelegate: URLSessionProxyDelegate(logger: NetworkLogger.swiftfin()),
-            accessToken: user.accessToken
+            sessionDelegate: URLSessionProxyDelegate(logger: NetworkLogger.swiftfin())
         )
 
         self.client = client
@@ -40,6 +39,11 @@ final class UserSession {
 }
 
 extension Container {
+
+    // TODO: be parameterized, take user id
+    //       - don't be optional
+    //       - in `ViewModel`, don't be implicitly unwrapped
+    //         and have idempotent default value
     var currentUserSession: Factory<UserSession?> {
         self {
             guard case let .signedIn(userId) = Defaults[.lastSignedInUserID] else { return nil }

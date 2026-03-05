@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Defaults
@@ -188,5 +188,58 @@ extension StoredValues.Keys {
                 default: ItemViewAttribute.allCases
             )
         }
+
+        static var previewImageScrubbing: Key<PreviewImageScrubbingOption> {
+            CurrentUserKey(
+                "previewImageScrubbing",
+                domain: "previewImageScrubbing",
+                default: .trickplay(fallbackToChapters: false)
+            )
+        }
+
+        static var forceDVTranscode: Key<Bool> {
+            CurrentUserKey(
+                "forceDVTranscode",
+                domain: "forceDVTranscode",
+                default: false
+            )
+        }
+
+        static var forceHDRTranscode: Key<Bool> {
+            CurrentUserKey(
+                "forceHDRTranscode",
+                domain: "forceHDRTranscode",
+                default: false
+            )
+        }
+    }
+}
+
+// TODO: chapters fallback
+enum PreviewImageScrubbingOption: CaseIterable, Displayable, Hashable, Storable {
+
+    case trickplay(fallbackToChapters: Bool = true)
+    case chapters
+    case disabled
+
+    var displayTitle: String {
+        switch self {
+        case .trickplay: "Trickplay"
+        case .disabled: L10n.disabled
+        case .chapters: "Chapters"
+        }
+    }
+
+    // TODO: enhance full screen determination
+    //       - allow checking against image size?
+    var supportsFullscreen: Bool {
+        switch self {
+        case .trickplay: true
+        case .disabled, .chapters: false
+        }
+    }
+
+    static var allCases: [PreviewImageScrubbingOption] {
+        [.trickplay(), .chapters, .disabled]
     }
 }

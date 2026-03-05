@@ -3,9 +3,10 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
+import Combine
 import Defaults
 import Foundation
 import SwiftUI
@@ -13,6 +14,11 @@ import SwiftUI
 // TODO: organize
 
 extension View {
+
+    @inlinable
+    func enabled(_ enabled: Bool) -> some View {
+        disabled(!enabled)
+    }
 
     @inlinable
     func eraseToAnyView() -> AnyView {
@@ -34,7 +40,7 @@ extension View {
     ///              Instead, use a native `if` statement.
     @ViewBuilder
     @inlinable
-    func `if`<Content: View>(_ condition: Bool, @ViewBuilder transform: (Self) -> Content) -> some View {
+    func `if`(_ condition: Bool, @ViewBuilder transform: (Self) -> some View) -> some View {
         if condition {
             transform(self)
         } else {
@@ -62,9 +68,9 @@ extension View {
     ///              Instead, use a native `if let` statement.
     @ViewBuilder
     @inlinable
-    func ifLet<Value, Content: View>(
+    func ifLet<Value>(
         _ value: Value?,
-        @ViewBuilder transform: (Self, Value) -> Content
+        @ViewBuilder transform: (Self, Value) -> some View
     ) -> some View {
         if let value {
             transform(self, value)
@@ -99,18 +105,55 @@ extension View {
     ) -> some View {
         switch type {
         case .landscape:
-            aspectRatio(1.77, contentMode: contentMode)
+            posterAspectRatio(type, contentMode: contentMode)
             #if !os(tvOS)
                 .posterBorder()
-                .cornerRadius(ratio: 1 / 30, of: \.width)
+                .posterCornerRadius(type)
             #endif
         case .portrait:
-            aspectRatio(2 / 3, contentMode: contentMode)
+            posterAspectRatio(type, contentMode: contentMode)
             #if !os(tvOS)
                 .posterBorder()
-                .cornerRadius(ratio: 0.0375, of: \.width)
+                .posterCornerRadius(type)
+            #endif
+        case .square:
+            posterAspectRatio(type, contentMode: contentMode)
+            #if os(iOS)
+                .posterBorder()
+                .posterCornerRadius(type)
             #endif
         }
+    }
+
+    @ViewBuilder
+    func posterAspectRatio(
+        _ type: PosterDisplayType,
+        contentMode: ContentMode = .fill
+    ) -> some View {
+        switch type {
+        case .landscape:
+            aspectRatio(1.77, contentMode: contentMode)
+        case .portrait:
+            aspectRatio(2 / 3, contentMode: contentMode)
+        case .square:
+            aspectRatio(1.0, contentMode: contentMode)
+        }
+    }
+
+    @ViewBuilder
+    func posterCornerRadius(
+        _ type: PosterDisplayType
+    ) -> some View {
+        #if !os(tvOS)
+        switch type {
+        case .landscape:
+            cornerRadius(ratio: 1 / 30, of: \.width)
+        case .portrait, .square:
+            cornerRadius(ratio: 0.0375, of: \.width)
+        }
+        #else
+        self
+        #endif
     }
 
     func posterBorder() -> some View {
@@ -124,17 +167,6 @@ extension View {
         }
     }
 
-    // TODO: consolidate handling
-    @ViewBuilder
-    func squarePosterStyle(contentMode: ContentMode = .fill) -> some View {
-        aspectRatio(1.0, contentMode: contentMode)
-        #if os(iOS)
-            .posterBorder()
-            .cornerRadius(ratio: 0.0375, of: \.width)
-            .posterShadow()
-        #endif
-    }
-
     func posterShadow() -> some View {
         shadow(radius: 4, y: 2)
     }
@@ -143,11 +175,11 @@ extension View {
         modifier(ScrollViewOffsetModifier(scrollViewOffset: scrollViewOffset))
     }
 
-    func backgroundParallaxHeader<Header: View>(
+    func backgroundParallaxHeader(
         _ scrollViewOffset: Binding<CGFloat>,
         height: CGFloat,
         multiplier: CGFloat = 1,
-        @ViewBuilder header: @escaping () -> Header
+        @ViewBuilder header: @escaping () -> some View
     ) -> some View {
         modifier(BackgroundParallaxHeaderModifier(scrollViewOffset, height: height, multiplier: multiplier, header: header))
     }
@@ -156,12 +188,30 @@ extension View {
         modifier(BottomEdgeGradientModifier(bottomColor: bottomColor))
     }
 
+    // TODO: rename `errorAlert`
+
     /// Error Message Alert
     func errorMessage(
         _ error: Binding<Error?>,
-        dismissActions: (() -> Void)? = nil
+        dismissAction: @escaping () -> Void = {}
     ) -> some View {
-        modifier(ErrorMessageModifier(error: error, dismissActions: dismissActions))
+        alert(
+            Text(L10n.error),
+            isPresented: .constant(error.wrappedValue != nil),
+            presenting: error.wrappedValue
+        ) { _ in
+            Button(L10n.dismiss, role: .cancel) {
+                error.wrappedValue = nil
+                dismissAction()
+            }
+        } message: { error in
+            Text(error.localizedDescription)
+        }
+        .backport
+        .onChange(of: error.wrappedValue != nil) { _, hasError in
+            guard hasError else { return }
+            UIDevice.feedback(.error)
+        }
     }
 
     @ViewBuilder
@@ -169,7 +219,7 @@ extension View {
         _ radius: CGFloat,
         corners: RectangleCorner = .allCorners,
         style: RoundedCornerStyle = .circular,
-        container: Bool = false,
+        container: Bool = false
     ) -> some View {
         // Note: UnevenRoundedRectangle with all equal radii has
         // been found to perform worse than RoundedRectangle
@@ -342,6 +392,12 @@ extension View {
         }
     }
 
+    func assign<P: Publisher>(_ publisher: P, to binding: Binding<P.Output>) -> some View where P.Failure == Never {
+        onReceive(publisher) { output in
+            binding.wrappedValue = output
+        }
+    }
+
     func onNotification<P>(_ key: Notifications.Key<P>, perform action: @escaping (P) -> Void) -> some View {
         modifier(
             OnReceiveNotificationModifier(
@@ -351,8 +407,32 @@ extension View {
         )
     }
 
-    func scrollIfLargerThanContainer(padding: CGFloat = 0) -> some View {
-        modifier(ScrollIfLargerThanContainerModifier(padding: padding))
+    func onAppDidEnterBackground(_ action: @escaping () -> Void) -> some View {
+        onNotification(.applicationDidEnterBackground, perform: action)
+    }
+
+    func onAppWillResignActive(_ action: @escaping () -> Void) -> some View {
+        onNotification(.applicationWillResignActive, perform: action)
+    }
+
+    func onAppWillEnterForeground(_ action: @escaping () -> Void) -> some View {
+        onNotification(.applicationWillEnterForeground, perform: action)
+    }
+
+    func onAppWillTerminate(_ action: @escaping () -> Void) -> some View {
+        onNotification(.applicationWillTerminate, perform: action)
+    }
+
+    func onSceneDidEnterBackground(_ action: @escaping () -> Void) -> some View {
+        onNotification(.sceneDidEnterBackground, perform: action)
+    }
+
+    func onSceneWillEnterForeground(_ action: @escaping () -> Void) -> some View {
+        onNotification(.sceneWillEnterForeground, perform: action)
+    }
+
+    func scrollIfLargerThanContainer(axes: Axis.Set = .vertical, padding: CGFloat = 0) -> some View {
+        modifier(ScrollIfLargerThanContainerModifier(axes: axes, padding: padding))
     }
 
     func maskLinearGradient(
@@ -361,19 +441,24 @@ extension View {
         modifier(OpacityLinearGradientModifier(stops: stops()))
     }
 
+    // TODO: look at changing to symbolEffect
+    func videoPlayerActionButtonTransition() -> some View {
+        transition(.opacity.combined(with: .scale).animation(.snappy))
+    }
+
     // MARK: debug
 
     // Useful modifiers during development for layout without RocketSim
 
     #if DEBUG
-    func debugBackground<S: ShapeStyle>(_ fill: S = .red.opacity(0.5)) -> some View {
+    func debugBackground(_ fill: some ShapeStyle = .red.opacity(0.5)) -> some View {
         background {
             Rectangle()
                 .fill(fill)
         }
     }
 
-    func debugOverlay<S: ShapeStyle>(_ fill: S = .red.opacity(0.5)) -> some View {
+    func debugOverlay(_ fill: some ShapeStyle = .red.opacity(0.5)) -> some View {
         overlay {
             Rectangle()
                 .fill(fill)
@@ -381,7 +466,7 @@ extension View {
         }
     }
 
-    func debugVLine<S: ShapeStyle>(_ fill: S) -> some View {
+    func debugVLine(_ fill: some ShapeStyle) -> some View {
         overlay {
             Rectangle()
                 .fill(fill)
@@ -389,7 +474,7 @@ extension View {
         }
     }
 
-    func debugHLine<S: ShapeStyle>(_ fill: S) -> some View {
+    func debugHLine(_ fill: some ShapeStyle) -> some View {
         overlay {
             Rectangle()
                 .fill(fill)
@@ -397,7 +482,7 @@ extension View {
         }
     }
 
-    func debugCross<S: ShapeStyle>(_ fill: S = .red) -> some View {
+    func debugCross(_ fill: some ShapeStyle = .red) -> some View {
         debugVLine(fill)
             .debugHLine(fill)
     }

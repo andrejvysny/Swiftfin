@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import JellyfinAPI
@@ -76,7 +76,7 @@ struct EditServerView: View {
                         }
                     }
                 } header: {
-                    L10n.url.text
+                    Text(L10n.url)
                 } footer: {
                     if !viewModel.server.isVersionCompatible {
                         Label(
@@ -88,9 +88,10 @@ struct EditServerView: View {
 
                 if isEditing {
                     Section {
-                        ListRowButton(L10n.delete, role: .destructive) {
+                        Button(L10n.delete, role: .destructive) {
                             isPresentingConfirmDeletion = true
                         }
+                        .buttonStyle(.primary)
                         .listRowBackground(Color.clear)
                         .listRowInsets(.zero)
                     }

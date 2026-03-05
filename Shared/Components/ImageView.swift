@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import BlurHashKit
@@ -19,7 +19,8 @@ import SwiftUI
 //       the blur hash view is at full opacity.
 //       - refactor for option
 //       - take a look at `RotateContentView`
-struct ImageView: View {
+// TODO: make Image and Placeholder generic constraints rather than any View
+struct ImageView<Failure: View>: View {
 
     @State
     private var sources: [ImageSource]
@@ -27,11 +28,11 @@ struct ImageView: View {
     private var image: (Image) -> any View
     private var pipeline: ImagePipeline
     private var placeholder: ((ImageSource) -> any View)?
-    private var failure: () -> any View
+    private var failure: Failure
 
     @ViewBuilder
     private func _placeholder(_ currentSource: ImageSource) -> some View {
-        if let placeholder = placeholder {
+        if let placeholder {
             placeholder(currentSource)
                 .eraseToAnyView()
         } else {
@@ -52,8 +53,7 @@ struct ImageView: View {
                             .eraseToAnyView()
                     }
                 } else if state.error != nil {
-                    failure()
-                        .eraseToAnyView()
+                    failure
                         .onAppear {
                             sources.removeFirstSafe()
                         }
@@ -62,13 +62,12 @@ struct ImageView: View {
             .pipeline(pipeline)
             .onDisappear(.lowerPriority)
         } else {
-            failure()
-                .eraseToAnyView()
+            failure
         }
     }
 }
 
-extension ImageView {
+extension ImageView where Failure == EmptyView {
 
     init(_ source: ImageSource) {
         self.init([source].compacted(using: \.url))
@@ -80,7 +79,7 @@ extension ImageView {
             image: { $0 },
             pipeline: .shared,
             placeholder: nil,
-            failure: { EmptyView() }
+            failure: EmptyView()
         )
     }
 
@@ -113,31 +112,34 @@ extension ImageView {
         copy(modifying: \.placeholder, with: content)
     }
 
-    func failure(@ViewBuilder _ content: @escaping () -> any View) -> Self {
-        copy(modifying: \.failure, with: content)
+    func failure<NewFailure: View>(@ViewBuilder _ content: @escaping () -> NewFailure) -> ImageView<NewFailure> {
+        ImageView<NewFailure>(
+            sources: sources,
+            image: image,
+            pipeline: pipeline,
+            placeholder: placeholder,
+            failure: content()
+        )
     }
 }
 
 // MARK: Defaults
 
-extension ImageView {
+struct DefaultFailureView: View {
 
-    struct DefaultFailureView: View {
-
-        var body: some View {
-            Color.secondarySystemFill
-                .opacity(0.75)
-        }
+    var body: some View {
+        Color.secondarySystemFill
+            .opacity(0.75)
     }
+}
 
-    struct DefaultPlaceholderView: View {
+struct DefaultPlaceholderView: View {
 
-        let blurHash: String?
+    let blurHash: String?
 
-        var body: some View {
-            if let blurHash {
-                BlurHashView(blurHash: blurHash, size: .Square(length: 8))
-            }
+    var body: some View {
+        if let blurHash {
+            BlurHashView(blurHash: blurHash, size: .Square(length: 8))
         }
     }
 }
