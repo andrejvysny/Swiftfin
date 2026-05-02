@@ -31,14 +31,13 @@ final class DownloadImageManager: DownloadImageManaging {
         if let backdropURL = urlBuilder.imageURL(for: task.item, type: .backdropImage),
            let itemID = task.item.id
         {
-            let context: ImageDownloadContext
-            switch task.item.type {
+            let context: ImageDownloadContext = switch task.item.type {
             case .movie:
-                context = .movie(id: itemID)
+                .movie(id: itemID)
             case .episode:
-                context = .episode(id: itemID)
+                .episode(id: itemID)
             default:
-                context = .episode(id: itemID)
+                .episode(id: itemID)
             }
 
             group.enter()
@@ -56,14 +55,13 @@ final class DownloadImageManager: DownloadImageManaging {
         if let primaryURL = urlBuilder.imageURL(for: task.item, type: .primaryImage),
            let itemID = task.item.id
         {
-            let context: ImageDownloadContext
-            switch task.item.type {
+            let context: ImageDownloadContext = switch task.item.type {
             case .movie:
-                context = .movie(id: itemID)
+                .movie(id: itemID)
             case .episode:
-                context = .episode(id: itemID)
+                .episode(id: itemID)
             default:
-                context = .episode(id: itemID)
+                .episode(id: itemID)
             }
 
             group.enter()
@@ -163,14 +161,14 @@ final class DownloadImageManager: DownloadImageManaging {
         let urlRequest = URLRequest(url: url)
 
         URLSession.shared.downloadTask(with: urlRequest) { [weak self] tempURL, response, error in
-            guard let self = self else { return }
+            guard let self else { return }
 
-            if let error = error {
+            if let error {
                 completion(.failure(error))
                 return
             }
 
-            guard let tempURL = tempURL else {
+            guard let tempURL else {
                 completion(.failure(NSError(
                     domain: "DownloadImageManager",
                     code: -1,

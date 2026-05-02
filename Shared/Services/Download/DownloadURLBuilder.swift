@@ -32,7 +32,7 @@ final class DownloadURLBuilder: DownloadURLBuilding {
     ) -> URL? {
         switch quality {
         case .original:
-            return constructDownloadURL(
+            constructDownloadURL(
                 itemId: itemId,
                 mediaSourceId: mediaSourceId,
                 container: container,
@@ -43,7 +43,7 @@ final class DownloadURLBuilder: DownloadURLBuilding {
                 deviceProfileId: deviceProfileId
             )
         case let .transcoded(bitrate):
-            return constructTranscodingDownloadURL(
+            constructTranscodingDownloadURL(
                 itemId: itemId,
                 bitrate: bitrate,
                 mediaSourceId: mediaSourceId,
@@ -107,7 +107,7 @@ final class DownloadURLBuilder: DownloadURLBuilding {
 
         var queryItems: [URLQueryItem] = []
 
-        if let mediaSourceId = mediaSourceId {
+        if let mediaSourceId {
             queryItems.append(URLQueryItem(name: "MediaSourceId", value: mediaSourceId))
         }
 
@@ -116,11 +116,11 @@ final class DownloadURLBuilder: DownloadURLBuilding {
         queryItems.append(URLQueryItem(name: "AllowVideoStreamCopy", value: allowVideoStreamCopy.description))
         queryItems.append(URLQueryItem(name: "AllowAudioStreamCopy", value: allowAudioStreamCopy.description))
 
-        if let deviceId = deviceId {
+        if let deviceId {
             queryItems.append(URLQueryItem(name: "DeviceId", value: deviceId))
         }
 
-        if let deviceProfileId = deviceProfileId {
+        if let deviceProfileId {
             queryItems.append(URLQueryItem(name: "DeviceProfileId", value: deviceProfileId))
         }
 
@@ -168,10 +168,10 @@ final class DownloadURLBuilder: DownloadURLBuilding {
             queryItems.append(URLQueryItem(name: "videoBitRate", value: String(bitrate.rawValue)))
         }
 
-        if let deviceId = deviceId {
+        if let deviceId {
             queryItems.append(URLQueryItem(name: "DeviceId", value: deviceId))
         }
-        if let deviceProfileId = deviceProfileId {
+        if let deviceProfileId {
             queryItems.append(URLQueryItem(name: "DeviceProfileId", value: deviceProfileId))
         }
 

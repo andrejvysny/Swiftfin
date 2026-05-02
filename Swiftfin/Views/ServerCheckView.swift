@@ -28,14 +28,14 @@ struct ServerCheckView: View {
 
                     ProgressView()
                 }
-            case let .error(error):
-                DownloadListView(error: error)
+            case .error:
+                DownloadListView(
+                    error: viewModel.error,
+                    onRetry: { viewModel.checkServer() }
+                )
             }
         }
         .animation(.linear(duration: 0.1), value: viewModel.state)
-        .refreshable {
-            viewModel.checkServer()
-        }
         .onFirstAppear {
             viewModel.checkServer()
         }

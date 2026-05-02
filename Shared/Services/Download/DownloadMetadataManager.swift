@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Foundation
@@ -65,8 +65,7 @@ final class DownloadMetadataManager: DownloadMetadataManaging {
         }
 
         do {
-            let metadata = try JSONDecoder().decode(DownloadMetadata.self, from: data)
-            return metadata
+            return try JSONDecoder().decode(DownloadMetadata.self, from: data)
         } catch {
             logger.warning("Failed to decode season metadata for seriesId: \(seriesId) season: \(seasonNumber) - \(error)")
             return nil
@@ -113,8 +112,7 @@ final class DownloadMetadataManager: DownloadMetadataManaging {
            let meta = try? jsonDecoder.decode(DownloadMetadata.self, from: data),
            let offlineItem = meta.item
         {
-            let task = DownloadTask(item: offlineItem)
-            return task
+            return DownloadTask(item: offlineItem)
         }
 
         do {
@@ -131,8 +129,7 @@ final class DownloadMetadataManager: DownloadMetadataManaging {
                        let episodeItem = seasonMeta.item,
                        episodeItem.type == .episode
                     {
-                        let task = DownloadTask(item: episodeItem)
-                        return task
+                        return DownloadTask(item: episodeItem)
                     }
                 }
             }
@@ -144,8 +141,7 @@ final class DownloadMetadataManager: DownloadMetadataManaging {
         if let itemData = FileManager.default.contents(atPath: legacyItemFile.path),
            let offlineItem = try? jsonDecoder.decode(BaseItemDto.self, from: itemData)
         {
-            let task = DownloadTask(item: offlineItem)
-            return task
+            return DownloadTask(item: offlineItem)
         }
 
         return nil

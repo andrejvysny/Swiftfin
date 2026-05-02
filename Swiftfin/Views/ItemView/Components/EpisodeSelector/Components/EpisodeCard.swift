@@ -20,6 +20,10 @@ extension SeriesEpisodeSelector {
         private var router
 
         let episode: BaseItemDto
+        var isSelectionMode: Bool = false
+        var isSelected: Bool = false
+        var onToggleSelection: (() -> Void)?
+        var onEnterSelectionMode: (() -> Void)?
 
         @ViewBuilder
         private var overlayView: some View {
@@ -50,15 +54,35 @@ extension SeriesEpisodeSelector {
             }
         }
 
+        @ViewBuilder
+        private var selectionOverlay: some View {
+            if isSelectionMode {
+                ZStack(alignment: .topTrailing) {
+                    Color.clear
+
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .resizable()
+                        .frame(width: 24, height: 24)
+                        .foregroundStyle(isSelected ? Color.accentColor : .white)
+                        .shadow(radius: 2)
+                        .padding(8)
+                }
+            }
+        }
+
         var body: some View {
             VStack(alignment: .leading) {
                 Button {
-                    router.route(
-                        to: .videoPlayer(
-                            item: episode,
-                            queue: EpisodeMediaPlayerQueue(episode: episode)
+                    if isSelectionMode {
+                        onToggleSelection?()
+                    } else {
+                        router.route(
+                            to: .videoPlayer(
+                                item: episode,
+                                queue: EpisodeMediaPlayerQueue(episode: episode)
+                            )
                         )
-                    )
+                    }
                 } label: {
                     ImageView(episode.imageSource(.primary, maxWidth: 250))
                         .failure {
@@ -68,11 +92,20 @@ extension SeriesEpisodeSelector {
                         .overlay {
                             overlayView
                         }
+                        .overlay {
+                            selectionOverlay
+                        }
                         .contentShape(.contextMenuPreview, Rectangle())
                         .backport
                         .matchedTransitionSource(id: "item", in: namespace)
                         .posterStyle(.landscape)
                         .posterShadow()
+                        .opacity(isSelectionMode && !isSelected ? 0.6 : 1.0)
+                }
+                .onLongPressGesture {
+                    if !isSelectionMode {
+                        onEnterSelectionMode?()
+                    }
                 }
 
                 SeriesEpisodeSelector.EpisodeContent(
@@ -80,7 +113,11 @@ extension SeriesEpisodeSelector {
                     subHeader: episode.episodeLocator ?? .emptyDash,
                     content: episodeContent
                 ) {
-                    router.route(to: .item(item: episode), in: namespace)
+                    if isSelectionMode {
+                        onToggleSelection?()
+                    } else {
+                        router.route(to: .item(item: episode), in: namespace)
+                    }
                 }
             }
         }

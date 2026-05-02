@@ -3,20 +3,27 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import JellyfinAPI
 import SwiftUI
 
 struct DownloadActionButtonWithProgress: View {
+    enum Styling {
+        case inherited
+        case plain
+    }
+
     @StateObject
     var viewModel: DownloadActionButtonWithProgressViewModel
 
     var onErrorTap: (() -> Void)?
     var onStartTap: (() -> Void)?
+    var onCompletedTap: (() -> Void)?
 
     private let shouldAutoStart: Bool
+    private let styling: Styling
 
     // MARK: - Convenience Initializers
 
@@ -25,7 +32,9 @@ struct DownloadActionButtonWithProgress: View {
         item: BaseItemDto,
         mediaSourceId: String? = nil,
         shouldAutoStart: Bool = true,
+        styling: Styling = .inherited,
         onStartTap: (() -> Void)? = nil,
+        onCompletedTap: (() -> Void)? = nil,
         onErrorTap: (() -> Void)? = nil
     ) {
         self._viewModel = StateObject(wrappedValue: DownloadActionButtonWithProgressViewModel(
@@ -34,7 +43,9 @@ struct DownloadActionButtonWithProgress: View {
             shouldAutoStart: shouldAutoStart
         ))
         self.shouldAutoStart = shouldAutoStart
+        self.styling = styling
         self.onStartTap = onStartTap
+        self.onCompletedTap = onCompletedTap
         self.onErrorTap = onErrorTap
     }
 
@@ -42,12 +53,16 @@ struct DownloadActionButtonWithProgress: View {
     init(
         viewModel: DownloadActionButtonWithProgressViewModel,
         shouldAutoStart: Bool = true,
+        styling: Styling = .inherited,
         onStartTap: (() -> Void)? = nil,
+        onCompletedTap: (() -> Void)? = nil,
         onErrorTap: (() -> Void)? = nil
     ) {
         self._viewModel = StateObject(wrappedValue: viewModel)
         self.shouldAutoStart = shouldAutoStart
+        self.styling = styling
         self.onStartTap = onStartTap
+        self.onCompletedTap = onCompletedTap
         self.onErrorTap = onErrorTap
     }
 
@@ -69,15 +84,18 @@ struct DownloadActionButtonWithProgress: View {
                 if shouldAutoStart {
                     viewModel.resume()
                 }
+            case .queued:
+                viewModel.cancel()
             case .error:
                 onStartTap?()
                 if shouldAutoStart {
+                    viewModel.retryDownload()
                     onErrorTap?()
                 }
             case .partiallyCompleted:
-                onStartTap?() // Allow navigation to selection view, but don't auto-start
+                onStartTap?()
             case .completed:
-                break // No action for fully completed downloads
+                onCompletedTap?()
             }
         } label: {
             if viewModel.state == .downloading {
@@ -92,8 +110,9 @@ struct DownloadActionButtonWithProgress: View {
                     .foregroundColor(iconColor(for: viewModel.state))
             }
         }
-        .buttonStyle(.plain)
-        .disabled(viewModel.state == .completed)
+        .if(styling == .plain) { view in
+            view.buttonStyle(.plain)
+        }
         .onAppear {
             // Refresh the download state when the view appears to ensure it's up to date
             viewModel.refreshDownloadState()
@@ -134,30 +153,34 @@ struct DownloadActionButtonWithProgress: View {
     private func iconName(for state: DownloadTaskState) -> String {
         switch state {
         case .completed:
-            return "checkmark.circle.fill"
+            "checkmark.circle.fill"
         case .paused:
-            return "pause.circle"
+            "pause.circle"
         case .ready:
-            return "arrow.down.circle"
+            "arrow.down.circle"
         case .downloading:
-            return "arrow.down" // Not used, handled by progressIcon
+            "arrow.down"
+        case .queued:
+            "clock.badge.checkmark"
         case .error:
-            return "exclamationmark.circle"
+            "exclamationmark.circle"
         case .partiallyCompleted:
-            return "checkmark.circle"
+            "checkmark.circle"
         }
     }
 
     private func iconColor(for state: DownloadTaskState) -> Color {
         switch state {
         case .completed, .partiallyCompleted:
-            return .green
+            .green
         case .ready:
-            return .primary
+            .primary
+        case .queued:
+            .orange
         case .error:
-            return .red
+            .red
         default:
-            return .accentColor
+            .accentColor
         }
     }
 }
@@ -169,6 +192,7 @@ struct DownloadActionButtonWithProgress: View {
         DownloadActionButtonWithProgress(viewModel: .init(state: .ready, progress: 0.0))
         DownloadActionButtonWithProgress(viewModel: .init(state: .downloading, progress: 0.3))
         DownloadActionButtonWithProgress(viewModel: .init(state: .paused, progress: 0.3))
+        DownloadActionButtonWithProgress(viewModel: .init(state: .queued, progress: 0.0))
         DownloadActionButtonWithProgress(viewModel: .init(state: .error, progress: 0.3))
         DownloadActionButtonWithProgress(viewModel: .init(state: .partiallyCompleted))
         DownloadActionButtonWithProgress(viewModel: .init(state: .completed))

@@ -8,6 +8,7 @@
 
 import CollectionVGrid
 import Defaults
+import Factory
 import JellyfinAPI
 import Nuke
 import SwiftUI
@@ -56,11 +57,19 @@ struct PagingLibraryView<Element: Poster>: View {
     @Default(.Customization.Library.letterPickerOrientation)
     private var letterPickerOrientation
 
+    @Injected(\.downloadManager)
+    private var downloadManager: DownloadManager
+
     @Namespace
     private var namespace
 
     @Router
     private var router
+
+    @State
+    private var isSelectionMode = false
+    @State
+    private var selectedItemIDs: Set<Int> = []
 
     @State
     private var layout: CollectionVGridLayout
@@ -210,6 +219,55 @@ struct PagingLibraryView<Element: Poster>: View {
     }
 
     @ViewBuilder
+    private func selectionItemView(item: Element, posterType: PosterDisplayType) -> some View {
+        Button {
+            let id = item.unwrappedIDHashOrZero
+            if selectedItemIDs.contains(id) {
+                selectedItemIDs.remove(id)
+            } else {
+                selectedItemIDs.insert(id)
+            }
+        } label: {
+            let isSelected = selectedItemIDs.contains(item.unwrappedIDHashOrZero)
+            ZStack(alignment: .topTrailing) {
+                PosterImage(item: item, type: posterType)
+                    .opacity(isSelected ? 1.0 : 0.6)
+
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .resizable()
+                    .frame(width: 22, height: 22)
+                    .foregroundStyle(isSelected ? Color.accentColor : .white)
+                    .shadow(radius: 2)
+                    .padding(6)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func downloadSelected() {
+        let items = viewModel.elements.filter { selectedItemIDs.contains($0.unwrappedIDHashOrZero) }
+        let baseItems = items.compactMap { $0 as? BaseItemDto }
+
+        Task {
+            for item in baseItems {
+                guard let itemId = item.id else { continue }
+                switch item.type {
+                case .movie, .episode:
+                    await MainActor.run { _ = downloadManager.downloadItems(items: [item]) }
+                case .series:
+                    try? await downloadManager.downloadAllSeries(seriesId: itemId)
+                default:
+                    break
+                }
+            }
+            await MainActor.run {
+                isSelectionMode = false
+                selectedItemIDs.removeAll()
+            }
+        }
+    }
+
+    @ViewBuilder
     private var elementsView: some View {
         CollectionVGrid(
             uniqueElements: viewModel.elements,
@@ -219,11 +277,15 @@ struct PagingLibraryView<Element: Poster>: View {
             let displayType = Defaults[.Customization.Library.rememberLayout] ? displayType : defaultDisplayType
             let posterType = Defaults[.Customization.Library.rememberLayout] ? posterType : defaultPosterType
 
-            switch displayType {
-            case .grid:
-                gridItemView(item: item, posterType: posterType)
-            case .list:
-                listItemView(item: item, posterType: posterType)
+            if isSelectionMode {
+                selectionItemView(item: item, posterType: posterType)
+            } else {
+                switch displayType {
+                case .grid:
+                    gridItemView(item: item, posterType: posterType)
+                case .list:
+                    listItemView(item: item, posterType: posterType)
+                }
             }
         }
         .onReachedBottomEdge(offset: .offset(300)) {
@@ -289,6 +351,26 @@ struct PagingLibraryView<Element: Poster>: View {
         }
         .navigationTitle(viewModel.parent?.displayTitle ?? "")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(isSelectionMode ? L10n.cancel : "Select") {
+                    isSelectionMode.toggle()
+                    if !isSelectionMode { selectedItemIDs.removeAll() }
+                }
+                .font(.subheadline)
+            }
+
+            ToolbarItemGroup(placement: .bottomBar) {
+                if isSelectionMode && !selectedItemIDs.isEmpty {
+                    Button {
+                        downloadSelected()
+                    } label: {
+                        Label("Download (\(selectedItemIDs.count))", systemImage: "arrow.down.circle")
+                    }
+                    Spacer()
+                }
+            }
+        }
         .refreshable {
             viewModel.send(.refresh)
         }

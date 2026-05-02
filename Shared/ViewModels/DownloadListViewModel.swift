@@ -8,7 +8,6 @@
 
 import Factory
 import JellyfinAPI
-import Logging
 import SwiftUI
 
 // MARK: - Presentation Models
@@ -20,9 +19,17 @@ struct DownloadedShow: Identifiable {
     let primaryImageURL: URL?
     let backdropImageURL: URL?
 
-    var displayTitle: String { seriesItem.displayTitle }
-    var episodeCount: Int { episodes.count }
-    var seasons: Set<Int> { Set(episodes.compactMap(\.seasonNumber)) }
+    var displayTitle: String {
+        seriesItem.displayTitle
+    }
+
+    var episodeCount: Int {
+        episodes.count
+    }
+
+    var seasons: Set<Int> {
+        Set(episodes.compactMap(\.seasonNumber))
+    }
 }
 
 struct DownloadedEpisode: Identifiable {
@@ -34,9 +41,17 @@ struct DownloadedEpisode: Identifiable {
     let backdropImageURL: URL?
     let fileSize: Int64?
 
-    var seasonNumber: Int? { episodeItem.parentIndexNumber }
-    var episodeNumber: Int? { episodeItem.indexNumber }
-    var displayTitle: String { episodeItem.displayTitle }
+    var seasonNumber: Int? {
+        episodeItem.parentIndexNumber
+    }
+
+    var episodeNumber: Int? {
+        episodeItem.indexNumber
+    }
+
+    var displayTitle: String {
+        episodeItem.displayTitle
+    }
 }
 
 struct DownloadedMovie: Identifiable {
@@ -46,8 +61,13 @@ struct DownloadedMovie: Identifiable {
     let primaryImageURL: URL?
     let backdropImageURL: URL?
 
-    var displayTitle: String { movieItem.displayTitle }
-    var hasMultipleVersions: Bool { versions.count > 1 }
+    var displayTitle: String {
+        movieItem.displayTitle
+    }
+
+    var hasMultipleVersions: Bool {
+        versions.count > 1
+    }
 }
 
 struct DownloadedVersion: Identifiable {
@@ -64,21 +84,23 @@ struct DownloadedVersion: Identifiable {
         {
             return mediaSource.displayTitle
         }
+
         if let mediaSourceId = versionInfo.mediaSourceId {
             return "Version \(mediaSourceId.prefix(8))"
         }
+
         return "Original Version"
     }
 }
 
-class DownloadListViewModel: ViewModel {
+@MainActor
+final class DownloadListViewModel: ViewModel {
 
     @Injected(\.downloadManager)
-    private var downloadManager
+    private var downloadManager: DownloadManager
 
     @Published
     var items: [DownloadTask] = []
-
 
     @Published
     private(set) var downloadedShows: [DownloadedShow] = []
@@ -87,7 +109,7 @@ class DownloadListViewModel: ViewModel {
     @Published
     private(set) var isLoading: Bool = false
 
-    // MARK: - Computed presentation
+    // MARK: - Computed Presentation
 
     var totalStorageUsedText: String {
         guard let totalBytes = downloadManager.getTotalDownloadSize() else { return L10n.unknown }
@@ -100,48 +122,47 @@ class DownloadListViewModel: ViewModel {
         return episodeCount + movieVersionCount
     }
 
-    override init() {
+    override nonisolated init() {
         super.init()
-        items = downloadManager.downloadedItems()
     }
 
     // MARK: - Intents
 
-    @MainActor
     func load() {
         guard !isLoading else { return }
         isLoading = true
         Task { await loadDownloadedItems() }
     }
 
-    @MainActor
-    func refresh() async { await loadDownloadedItems() }
+    func refresh() async {
+        await loadDownloadedItems()
+    }
 
     func deleteShow(id: String) {
         logger.info("Deleting downloaded show: \(id)")
-        if downloadManager.deleteDownloadedMedia(itemId: id) {
-            DispatchQueue.main.async { self.downloadedShows.removeAll { $0.id == id } }
-        } else {
+        guard downloadManager.deleteDownloadedMedia(itemId: id) else {
             logger.error("Failed to delete show: \(id)")
+            return
         }
+
+        downloadedShows.removeAll { $0.id == id }
     }
 
     func deleteMovie(id: String) {
         logger.info("Deleting downloaded movie: \(id)")
-        if downloadManager.deleteDownloadedMedia(itemId: id) {
-            DispatchQueue.main.async { self.downloadedMovies.removeAll { $0.id == id } }
-        } else {
+        guard downloadManager.deleteDownloadedMedia(itemId: id) else {
             logger.error("Failed to delete movie: \(id)")
+            return
         }
+
+        downloadedMovies.removeAll { $0.id == id }
     }
 
     func deleteAll() {
         logger.info("Deleting all downloads")
         downloadManager.deleteAllDownloadedMedia()
-        DispatchQueue.main.async {
-            self.downloadedShows.removeAll()
-            self.downloadedMovies.removeAll()
-        }
+        downloadedShows.removeAll()
+        downloadedMovies.removeAll()
     }
 
     // MARK: - Private
@@ -195,6 +216,7 @@ class DownloadListViewModel: ViewModel {
                     if let imageFile = contents.first(where: { $0.hasPrefix("Episode-\(episodeId)-\(imageName)") }) {
                         return seasonImagesFolder.appendingPathComponent(imageFile)
                     }
+
                     if let seasonId = item.seasonID,
                        let imageFile = contents.first(where: { $0.hasPrefix("Season-\(seasonId)-\(imageName)") })
                     {
@@ -209,282 +231,334 @@ class DownloadListViewModel: ViewModel {
             {
                 return seriesImagesFolder.appendingPathComponent(imageFile)
             }
-            return nil
-        } else {
-            let imagesFolder = URL.downloads.appendingPathComponent(itemId).appendingPathComponent("Images")
-            if let contents = try? FileManager.default.contentsOfDirectory(atPath: imagesFolder.path),
-               let imageFile = contents.first(where: { $0.hasPrefix(imageName) })
-            {
-                return imagesFolder.appendingPathComponent(imageFile)
-            }
+
             return nil
         }
-    }
 
-    private func getEpisodeMediaURL(for seriesId: String, in seasonPath: URL, episodeItem: BaseItemDto, versionInfo: VersionInfo) -> URL? {
-        do {
-            let contents = try FileManager.default.contentsOfDirectory(atPath: seasonPath.path)
-
-            if let mediaSourceId = versionInfo.mediaSourceId,
-               let mediaFile = contents.first(where: { $0.contains(mediaSourceId) && !$0.contains("metadata") })
-            {
-                return seasonPath.appendingPathComponent(mediaFile)
-            }
-
-            if let episodeId = episodeItem.id,
-               let mediaFile = contents.first(where: { $0.contains(episodeId) && !$0.contains("metadata") })
-            {
-                return seasonPath.appendingPathComponent(mediaFile)
-            }
-
-            if let mediaFile = contents.first(where: { $0.hasPrefix("Media.") }) {
-                return seasonPath.appendingPathComponent(mediaFile)
-            }
-        } catch {
-            logger.warning("Error reading season folder contents at \(seasonPath.path): \(error)")
+        let imagesFolder = URL.downloads.appendingPathComponent(itemId).appendingPathComponent("Images")
+        if let contents = try? FileManager.default.contentsOfDirectory(atPath: imagesFolder.path),
+           let imageFile = contents.first(where: { $0.hasPrefix(imageName) })
+        {
+            return imagesFolder.appendingPathComponent(imageFile)
         }
+
         return nil
     }
 
-    private func getMediaURL(for itemId: String, versionInfo: VersionInfo) -> URL? {
-        let downloadPath = URL.downloads.appendingPathComponent(itemId)
-        if let enumerator = FileManager.default.enumerator(
-            at: downloadPath,
-            includingPropertiesForKeys: [.isRegularFileKey],
-            options: [.skipsHiddenFiles]
-        ) {
-            for case let url as URL in enumerator {
-                let filename = url.lastPathComponent
-                guard !filename.contains("metadata") else { continue }
-                if let msid = versionInfo.mediaSourceId, filename.contains(msid) { return url }
-                if filename.hasPrefix("Media.") || filename.contains(itemId) { return url }
-            }
-        }
-        return nil
+    private func loadMetadata(at url: URL) -> DownloadMetadata? {
+        guard let data = FileManager.default.contents(atPath: url.path) else { return nil }
+        return try? JSONDecoder().decode(DownloadMetadata.self, from: data)
     }
 
     private func inferEpisodeId(in seasonFolder: URL, versionInfo: VersionInfo) -> String? {
-        if let contents = try? FileManager.default.contentsOfDirectory(atPath: seasonFolder.path) {
-            let candidates = contents.filter { filename in
-                guard !filename.contains("metadata") else { return false }
-                if let msid = versionInfo.mediaSourceId, filename.contains(msid) { return true }
-                return filename.contains("-")
-            }
-            if let match = candidates.first, let dash = match.firstIndex(of: "-") {
-                return String(match[..<dash])
-            }
+        guard let contents = try? FileManager.default.contentsOfDirectory(atPath: seasonFolder.path) else {
+            return nil
         }
+
+        let candidates = contents.filter { filename in
+            guard !filename.contains("metadata") else { return false }
+
+            if let mediaSourceId = versionInfo.mediaSourceId, filename.contains(mediaSourceId) {
+                return true
+            }
+
+            return filename.contains("-")
+        }
+
+        if let match = candidates.first, let dash = match.firstIndex(of: "-") {
+            return String(match[..<dash])
+        }
+
         return nil
     }
 
-    @MainActor
+    private func resolveEpisodeItem(for versionInfo: VersionInfo, from metadata: DownloadMetadata, in seasonPath: URL) -> BaseItemDto? {
+        if let episodeId = versionInfo.episodeId, let episodeItem = metadata.episodes?[episodeId] {
+            return episodeItem
+        }
+
+        if let inferredEpisodeId = inferEpisodeId(in: seasonPath, versionInfo: versionInfo),
+           let episodeItem = metadata.episodes?[inferredEpisodeId]
+        {
+            return episodeItem
+        }
+
+        if let episodeItem = metadata.item, episodeItem.type == .episode {
+            return episodeItem
+        }
+
+        return nil
+    }
+
+    private func versionBelongs(_ version: VersionInfo, to item: BaseItemDto) -> Bool {
+        guard let episodeId = item.id else { return false }
+
+        if version.episodeId == episodeId {
+            return true
+        }
+
+        if version.episodeId == nil {
+            if let mediaSourceId = version.mediaSourceId,
+               item.mediaSources?.contains(where: { $0.id == mediaSourceId }) == true
+            {
+                return true
+            }
+
+            return version.versionId == episodeId || version.mediaSourceId == episodeId
+        }
+
+        return false
+    }
+
+    private func placeholderVersion(for item: BaseItemDto) -> VersionInfo {
+        VersionInfo(
+            versionId: item.id ?? UUID().uuidString,
+            container: item.mediaSources?.first?.container ?? "mp4",
+            isStatic: true,
+            mediaSourceId: item.mediaSources?.first?.id,
+            episodeId: item.type == .episode ? item.id : nil,
+            downloadDate: "",
+            taskId: ""
+        )
+    }
+
+    private func resolvedVersion(for item: BaseItemDto, preferredVersion: VersionInfo?) -> VersionInfo? {
+        if let preferredVersion,
+           downloadManager.mediaFileURL(for: item, version: preferredVersion) != nil
+        {
+            return preferredVersion
+        }
+
+        if let preferredIdentifier = preferredVersion?.mediaSourceId ?? preferredVersion?.versionId,
+           let playbackVersion = downloadManager.playbackInfo(for: item, mediaSourceId: preferredIdentifier)?.version
+        {
+            return playbackVersion
+        }
+
+        if let playbackVersion = downloadManager.playbackInfo(for: item, mediaSourceId: nil)?.version {
+            return playbackVersion
+        }
+
+        return downloadManager.downloadedVersions(for: item).first
+    }
+
+    private func buildDownloadedEpisode(
+        episodeItem: BaseItemDto,
+        preferredVersion: VersionInfo?,
+        seriesId: String
+    ) -> DownloadedEpisode? {
+        let resolvedVersion = resolvedVersion(for: episodeItem, preferredVersion: preferredVersion)
+            ?? preferredVersion
+            ?? placeholderVersion(for: episodeItem)
+
+        guard let mediaURL = downloadManager.mediaFileURL(for: episodeItem, version: resolvedVersion),
+              FileManager.default.fileExists(atPath: mediaURL.path)
+        else {
+            return nil
+        }
+
+        return DownloadedEpisode(
+            id: episodeItem.id ?? UUID().uuidString,
+            episodeItem: episodeItem,
+            versionInfo: resolvedVersion,
+            mediaURL: mediaURL,
+            primaryImageURL: getPrimaryImageURL(for: seriesId, item: episodeItem),
+            backdropImageURL: getBackdropImageURL(for: seriesId, item: episodeItem),
+            fileSize: downloadManager.mediaFileSize(for: episodeItem, version: resolvedVersion)
+        )
+    }
+
+    private func buildDownloadedVersion(item: BaseItemDto, versionInfo: VersionInfo) -> DownloadedVersion? {
+        guard let mediaURL = downloadManager.mediaFileURL(for: item, version: versionInfo),
+              FileManager.default.fileExists(atPath: mediaURL.path),
+              let itemId = item.id
+        else {
+            return nil
+        }
+
+        return DownloadedVersion(
+            id: versionInfo.versionId,
+            item: item,
+            versionInfo: versionInfo,
+            mediaURL: mediaURL,
+            primaryImageURL: getPrimaryImageURL(for: itemId, item: item),
+            backdropImageURL: getBackdropImageURL(for: itemId, item: item)
+        )
+    }
+
+    private func deduplicateEpisodes(_ episodes: [DownloadedEpisode]) -> [DownloadedEpisode] {
+        var uniqueEpisodes: [DownloadedEpisode] = []
+        var seenEpisodeIds: Set<String> = []
+
+        for episode in episodes.sorted(by: episodeSortComparator) {
+            if let episodeId = episode.episodeItem.id {
+                guard !seenEpisodeIds.contains(episodeId) else { continue }
+                seenEpisodeIds.insert(episodeId)
+                uniqueEpisodes.append(episode)
+                continue
+            }
+
+            let fallbackKey = "\(episode.seasonNumber ?? 0)_\(episode.episodeNumber ?? 0)"
+            guard !seenEpisodeIds.contains(fallbackKey) else { continue }
+            seenEpisodeIds.insert(fallbackKey)
+            uniqueEpisodes.append(episode)
+        }
+
+        return uniqueEpisodes
+    }
+
+    private func episodeSortComparator(_ lhs: DownloadedEpisode, _ rhs: DownloadedEpisode) -> Bool {
+        if let lhsSeason = lhs.seasonNumber, let rhsSeason = rhs.seasonNumber, lhsSeason != rhsSeason {
+            return lhsSeason < rhsSeason
+        }
+
+        if let lhsEpisode = lhs.episodeNumber, let rhsEpisode = rhs.episodeNumber, lhsEpisode != rhsEpisode {
+            return lhsEpisode < rhsEpisode
+        }
+
+        return lhs.displayTitle < rhs.displayTitle
+    }
+
+    private func loadShowEpisodes(
+        seriesId: String,
+        itemPath: URL,
+        seasonFolders: [String]
+    ) -> (seriesItem: BaseItemDto, episodes: [DownloadedEpisode])? {
+        var seriesItem: BaseItemDto?
+        var allEpisodes: [DownloadedEpisode] = []
+
+        for seasonFolder in seasonFolders.sorted() {
+            let seasonPath = itemPath.appendingPathComponent(seasonFolder)
+            let metadataURL = seasonPath.appendingPathComponent("metadata.json")
+
+            guard let metadata = loadMetadata(at: metadataURL) else { continue }
+
+            if let episodesDict = metadata.episodes, !episodesDict.isEmpty {
+                for episodeItem in episodesDict.values.sorted(by: { $0.displayTitle < $1.displayTitle }) {
+                    if seriesItem == nil {
+                        seriesItem = createSeriesItemFromEpisode(episodeItem)
+                    }
+
+                    let preferredVersion = metadata.versions.first { versionBelongs($0, to: episodeItem) }
+                    if let downloadedEpisode = buildDownloadedEpisode(
+                        episodeItem: episodeItem,
+                        preferredVersion: preferredVersion,
+                        seriesId: seriesId
+                    ) {
+                        allEpisodes.append(downloadedEpisode)
+                    }
+                }
+            } else {
+                for versionInfo in metadata.versions {
+                    guard let episodeItem = resolveEpisodeItem(for: versionInfo, from: metadata, in: seasonPath) else { continue }
+
+                    if seriesItem == nil {
+                        seriesItem = createSeriesItemFromEpisode(episodeItem)
+                    }
+
+                    if let downloadedEpisode = buildDownloadedEpisode(
+                        episodeItem: episodeItem,
+                        preferredVersion: versionInfo,
+                        seriesId: seriesId
+                    ) {
+                        allEpisodes.append(downloadedEpisode)
+                    }
+                }
+            }
+        }
+
+        guard let seriesItem else { return nil }
+        return (seriesItem: seriesItem, episodes: deduplicateEpisodes(allEpisodes))
+    }
+
+    private func appendLegacyEpisode(
+        item: BaseItemDto,
+        into showsDict: inout [String: (seriesItem: BaseItemDto, episodes: [DownloadedEpisode])]
+    ) {
+        guard let seriesId = item.seriesID else { return }
+
+        if showsDict[seriesId] == nil {
+            showsDict[seriesId] = (seriesItem: createSeriesItemFromEpisode(item), episodes: [])
+        }
+
+        let preferredVersions = downloadManager.downloadedVersions(for: item)
+        if preferredVersions.isEmpty {
+            if let downloadedEpisode = buildDownloadedEpisode(episodeItem: item, preferredVersion: nil, seriesId: seriesId) {
+                showsDict[seriesId]?.episodes.append(downloadedEpisode)
+            }
+            return
+        }
+
+        for versionInfo in preferredVersions {
+            if let downloadedEpisode = buildDownloadedEpisode(episodeItem: item, preferredVersion: versionInfo, seriesId: seriesId) {
+                showsDict[seriesId]?.episodes.append(downloadedEpisode)
+            }
+        }
+    }
+
+    private func appendMovie(metadata: DownloadMetadata, item: BaseItemDto, itemId: String, into movies: inout [DownloadedMovie]) {
+        let versions = metadata.versions.compactMap { buildDownloadedVersion(item: item, versionInfo: $0) }
+        guard !versions.isEmpty else { return }
+
+        movies.append(
+            DownloadedMovie(
+                id: item.id ?? UUID().uuidString,
+                movieItem: item,
+                versions: versions,
+                primaryImageURL: getPrimaryImageURL(for: itemId, item: item),
+                backdropImageURL: getBackdropImageURL(for: itemId, item: item)
+            )
+        )
+    }
+
     private func loadDownloadedItems() async {
         logger.info("Loading downloaded items from filesystem")
         defer { isLoading = false }
 
         let downloadedItemIds = downloadManager.getDownloadedItemIds()
-        logger.info("Found \(downloadedItemIds.count) downloaded item folders")
-
         var showsDict: [String: (seriesItem: BaseItemDto, episodes: [DownloadedEpisode])] = [:]
         var moviesArray: [DownloadedMovie] = []
 
         for itemId in downloadedItemIds {
             let itemPath = URL.downloads.appendingPathComponent(itemId)
-            guard let contents = try? FileManager.default.contentsOfDirectory(atPath: itemPath.path) else { continue }
+            let contents = (try? FileManager.default.contentsOfDirectory(atPath: itemPath.path)) ?? []
             let seasonFolders = contents.filter { $0.hasPrefix("Season-") }
 
             if !seasonFolders.isEmpty {
-                var allEpisodes: [DownloadedEpisode] = []
-                var seriesItem: BaseItemDto?
-
-                for seasonFolder in seasonFolders.sorted() {
-                    let seasonPath = itemPath.appendingPathComponent(seasonFolder)
-                    let seasonMetadataFile = seasonPath.appendingPathComponent("metadata.json")
-
-                    guard let seasonData = FileManager.default.contents(atPath: seasonMetadataFile.path),
-                          let seasonMetadata = try? JSONDecoder().decode(DownloadMetadata.self, from: seasonData)
-                    else { continue }
-
-                    if let episodesDict = seasonMetadata.episodes, !episodesDict.isEmpty {
-                        // New strategy: Iterate over the episodes dictionary
-                        for (episodeId, episodeItem) in episodesDict {
-                            if seriesItem == nil { seriesItem = createSeriesItemFromEpisode(episodeItem) }
-
-                            let versionInfo = seasonMetadata.versions.first {
-                                $0.episodeId == episodeId || $0.versionId == episodeId || $0.mediaSourceId == episodeId
-                            }
-
-                            let finalVersionInfo = versionInfo ?? VersionInfo(
-                                versionId: episodeId,
-                                container: "mp4",
-                                isStatic: true,
-                                mediaSourceId: episodeId,
-                                episodeId: episodeId,
-                                downloadDate: "",
-                                taskId: ""
-                            )
-
-                            let mediaURL = getEpisodeMediaURL(
-                                for: itemId,
-                                in: seasonPath,
-                                episodeItem: episodeItem,
-                                versionInfo: finalVersionInfo
-                            )
-
-                            guard let finalMediaURL = mediaURL, FileManager.default.fileExists(atPath: finalMediaURL.path) else {
-                                logger
-                                    .warning(
-                                        "Could not find media file for episode '\(episodeItem.displayTitle)' in season folder. Skipping."
-                                    )
-                                continue
-                            }
-
-                            let primaryImageURL = getPrimaryImageURL(for: itemId, item: episodeItem)
-                            let backdropImageURL = getBackdropImageURL(for: itemId, item: episodeItem)
-
-                            let downloadedEpisode = DownloadedEpisode(
-                                id: (episodeItem.id ?? UUID().uuidString) + ":" + finalVersionInfo.versionId,
-                                episodeItem: episodeItem,
-                                versionInfo: finalVersionInfo,
-                                mediaURL: finalMediaURL,
-                                primaryImageURL: primaryImageURL,
-                                backdropImageURL: backdropImageURL,
-                                fileSize: try? FileManager.default.attributesOfItem(atPath: finalMediaURL.path)[.size] as? Int64
-                            )
-                            allEpisodes.append(downloadedEpisode)
-                        }
-                    } else {
-                        // Fallback for older metadata that might not have the 'episodes' dictionary.
-                        for versionInfo in seasonMetadata.versions {
-                            var episodeItem: BaseItemDto?
-
-                            if let epId = versionInfo.episodeId, let epItem = seasonMetadata.episodes?[epId] {
-                                episodeItem = epItem
-                            } else if let inferredId = inferEpisodeId(in: seasonPath, versionInfo: versionInfo),
-                                      let epItem = seasonMetadata.episodes?[inferredId]
-                            {
-                                episodeItem = epItem
-                            } else if let templateItem = seasonMetadata.item, templateItem.type == .episode {
-                                episodeItem = templateItem
-                            }
-
-                            if let episodeItem {
-                                if seriesItem == nil { seriesItem = createSeriesItemFromEpisode(episodeItem) }
-
-                                let mediaURL = getEpisodeMediaURL(
-                                    for: itemId,
-                                    in: seasonPath,
-                                    episodeItem: episodeItem,
-                                    versionInfo: versionInfo
-                                )
-                                let primaryImageURL = getPrimaryImageURL(for: itemId, item: episodeItem)
-                                let backdropImageURL = getBackdropImageURL(for: itemId, item: episodeItem)
-
-                                let downloadedEpisode = DownloadedEpisode(
-                                    id: (episodeItem.id ?? UUID().uuidString) + ":" + versionInfo.versionId,
-                                    episodeItem: episodeItem,
-                                    versionInfo: versionInfo,
-                                    mediaURL: mediaURL,
-                                    primaryImageURL: primaryImageURL,
-                                    backdropImageURL: backdropImageURL,
-                                    fileSize: mediaURL
-                                        .flatMap { try? FileManager.default.attributesOfItem(atPath: $0.path)[.size] as? Int64 }
-                                )
-                                allEpisodes.append(downloadedEpisode)
-                            }
-                        }
-                    }
+                if let showData = loadShowEpisodes(seriesId: itemId, itemPath: itemPath, seasonFolders: seasonFolders),
+                   !showData.episodes.isEmpty
+                {
+                    showsDict[itemId] = showData
                 }
+                continue
+            }
 
-                if let seriesItem, !allEpisodes.isEmpty {
-                    showsDict[itemId] = (seriesItem: seriesItem, episodes: allEpisodes)
-                }
-            } else {
-                guard let metadata = downloadManager.getDownloadMetadata(for: itemId), let item = metadata.item else { continue }
+            guard let metadata = downloadManager.getDownloadMetadata(for: itemId), let item = metadata.item else { continue }
 
-                switch item.type {
-                case .episode:
-                    if let seriesId = item.seriesID {
-                        if showsDict[seriesId] ==
-                            nil { showsDict[seriesId] = (seriesItem: createSeriesItemFromEpisode(item), episodes: []) }
-                        for versionInfo in metadata.versions {
-                            let mediaURL = getMediaURL(for: itemId, versionInfo: versionInfo)
-                            let primaryImageURL = getPrimaryImageURL(for: itemId, item: item)
-                            let backdropImageURL = getBackdropImageURL(for: itemId, item: item)
-
-                            showsDict[seriesId]?.episodes.append(
-                                DownloadedEpisode(
-                                    id: (item.id ?? UUID().uuidString) + ":" + versionInfo.versionId,
-                                    episodeItem: item,
-                                    versionInfo: versionInfo,
-                                    mediaURL: mediaURL,
-                                    primaryImageURL: primaryImageURL,
-                                    backdropImageURL: backdropImageURL,
-                                    fileSize: mediaURL
-                                        .flatMap { try? FileManager.default.attributesOfItem(atPath: $0.path)[.size] as? Int64 }
-                                )
-                            )
-                        }
-                    }
-                case .movie:
-                    var downloadedVersions: [DownloadedVersion] = []
-                    for versionInfo in metadata.versions {
-                        let mediaURL = getMediaURL(for: itemId, versionInfo: versionInfo)
-                        let primaryImageURL = getPrimaryImageURL(for: itemId, item: item)
-                        let backdropImageURL = getBackdropImageURL(for: itemId, item: item)
-
-                        downloadedVersions.append(
-                            DownloadedVersion(
-                                id: versionInfo.versionId,
-                                item: item,
-                                versionInfo: versionInfo,
-                                mediaURL: mediaURL,
-                                primaryImageURL: primaryImageURL,
-                                backdropImageURL: backdropImageURL
-                            )
-                        )
-                    }
-                    if !downloadedVersions.isEmpty {
-                        let primaryImageURL = getPrimaryImageURL(for: itemId, item: item)
-                        let backdropImageURL = getBackdropImageURL(for: itemId, item: item)
-                        let downloadedMovie = DownloadedMovie(
-                            id: item.id ?? UUID().uuidString,
-                            movieItem: item,
-                            versions: downloadedVersions,
-                            primaryImageURL: primaryImageURL,
-                            backdropImageURL: backdropImageURL
-                        )
-                        moviesArray.append(downloadedMovie)
-                    }
-                default:
-                    continue
-                }
+            switch item.type {
+            case .episode:
+                appendLegacyEpisode(item: item, into: &showsDict)
+            case .movie:
+                appendMovie(metadata: metadata, item: item, itemId: itemId, into: &moviesArray)
+            default:
+                continue
             }
         }
 
-        var showsArray: [DownloadedShow] = []
-        for (seriesId, seriesData) in showsDict {
-            let primaryImageURL = getSeriesPrimaryImageURL(for: seriesId)
-            let backdropImageURL = getSeriesBackdropImageURL(for: seriesId)
-
-            let sortedEpisodes = seriesData.episodes.sorted {
-                if let s1 = $0.seasonNumber, let s2 = $1.seasonNumber, s1 != s2 { return s1 < s2 }
-                if let e1 = $0.episodeNumber, let e2 = $1.episodeNumber, e1 != e2 { return e1 < e2 }
-                return $0.displayTitle < $1.displayTitle
-            }
-
-            showsArray.append(
-                DownloadedShow(
-                    id: seriesData.seriesItem.id ?? UUID().uuidString,
-                    seriesItem: seriesData.seriesItem,
-                    episodes: sortedEpisodes,
-                    primaryImageURL: primaryImageURL,
-                    backdropImageURL: backdropImageURL
+        downloadedShows = showsDict.values
+            .map { entry in
+                let seriesId = entry.seriesItem.id ?? UUID().uuidString
+                return DownloadedShow(
+                    id: seriesId,
+                    seriesItem: entry.seriesItem,
+                    episodes: deduplicateEpisodes(entry.episodes).sorted(by: episodeSortComparator),
+                    primaryImageURL: getSeriesPrimaryImageURL(for: seriesId),
+                    backdropImageURL: getSeriesBackdropImageURL(for: seriesId)
                 )
-            )
-        }
+            }
+            .sorted { $0.displayTitle < $1.displayTitle }
 
-        downloadedShows = showsArray.sorted { $0.displayTitle < $1.displayTitle }
         downloadedMovies = moviesArray.sorted { $0.displayTitle < $1.displayTitle }
+        items = downloadManager.downloadedItems()
     }
 }

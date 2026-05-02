@@ -1,28 +1,40 @@
-# PR #1674 Review Fixes
+# Bulk Downloads Implementation
 
-## Files to Remove
+## Phase 1: Concurrent Download Queue
 
-- [x] Remove `development.md`
-- [x] Remove `test.md`
-- [x] Remove `DEVELOPER_GUIDE.md`
+- [x] Add `.queued` to `DownloadTask.State`
+- [x] Add `.queued` to `ActiveDownloadRecord.ActiveDownloadStatus`
+- [x] Add `queuePosition` to `ActiveDownloadRecord`
+- [x] Add queue logic to `DownloadManager` (maxConcurrent=3, pendingQueue, startNextQueued)
+- [x] Update `persistQueue()` for queued state
+- [x] Update `recoverDownloadsOnLaunch()` for queued items
+- [x] Add `.queued` to `DownloadTaskState` enum in VM
+- [x] Add queued icon in `DownloadActionButtonWithProgress`
 
-## File Naming / Organization
+## Phase 2: Bulk Download Methods
 
-- [x] Rename `Documentation/downloads-file-structure-guide.md` to camelCase
-- [x] Add `.github/copilot-instructions.md` to `.gitignore`
+- [x] Add `downloadSeason()` to `DownloadManager`
+- [x] Add `downloadItems()` to `DownloadManager`
+- [x] Add `downloadAllSeries()` to `DownloadManager`
 
-## Use Existing Patterns Instead of Custom
+## Phase 6: Queue Section in Downloads List
 
-- [x] Replace `Int64.toReadableFileSize()` with `FormatStyle` in `FormatStyle.swift`, remove `Int64+Extensions.swift`
-- [x] Replace `DownloadQuality`/`TranscodingParameters` with `PlaybackBitrate` reference
-- [x] Remove `seasonImageURL` from `BaseItemDto+Images.swift`
+- [x] Add active/queued download sections to `DownloadListView`
+- [x] ActiveDownloadRow + QueuedDownloadRow components
 
-## Download Path Structure
+## Phase 3: Season Download Button
 
-- [x] Nest episode downloads into season folder: `series/season/episodeId` not `series/episodeId`
+- [x] Create `SeasonDownloadButton.swift`
+- [x] Add to `EpisodeSelector` header
 
-## Code Cleanup
+## Phase 4: Multi-Select Episodes
 
-- [x] Remove AI-generated comments throughout
-- [x] Clean up unnecessary commented-out code
-- [x] Remove debug methods from DownloadMetadataManager
+- [x] Selection mode in `EpisodeSelector`
+- [x] Checkbox overlay on `EpisodeCard`
+- [x] Download selected action
+
+## Phase 5: Multi-Select in Library Views
+
+- [x] Selection mode in `PagingLibraryView`
+- [x] Batch download action
+- [x] Edit mode in `DownloadListView` for batch delete

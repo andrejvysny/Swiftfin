@@ -112,6 +112,7 @@ struct NavigationInjectionView: View {
                         routeBinding.wrappedValue.destination
                             .environment(\.presentationControllerShouldDismiss, $isPresentationInteractive)
                     }
+                    .environmentObject(rootCoordinator)
                 }
 
                 // TODO: presentation options for customizing background color, dimming effect, etc.

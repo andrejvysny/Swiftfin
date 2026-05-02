@@ -17,10 +17,15 @@ extension ItemView {
 
         @Default(.accentColor)
         private var accentColor
+        @Injected(\.downloadManager)
+        private var downloadManager: DownloadManager
         @Router
         private var router
         @StoredValue(.User.enabledTrailers)
         private var enabledTrailers: TrailerSelection
+
+        @State
+        private var showDownloadManagementActions = false
 
         @ObservedObject
         private var viewModel: ItemViewModel
@@ -128,6 +133,13 @@ extension ItemView {
                                 // Single source - the ViewModel will handle the download start automatically
                                 // No additional action needed here as the button will call viewModel.start()
                             }
+                        },
+                        onCompletedTap: {
+                            if let sources = viewModel.item.mediaSources, sources.count > 1 {
+                                router.route(to: .itemDownloadSelection(item: viewModel.item))
+                            } else {
+                                showDownloadManagementActions = true
+                            }
                         }
                     )
                     .if(equalSpacing) { view in
@@ -139,6 +151,13 @@ extension ItemView {
             .fontWeight(.semibold)
             .buttonStyle(.material)
             .labelStyle(.iconOnly)
+            .confirmationDialog(L10n.manage, isPresented: $showDownloadManagementActions, titleVisibility: .visible) {
+                Button(L10n.delete, role: .destructive) {
+                    _ = downloadManager.deleteDownloadedMedia(item: viewModel.item)
+                }
+
+                Button(L10n.cancel, role: .cancel) {}
+            }
         }
     }
 }

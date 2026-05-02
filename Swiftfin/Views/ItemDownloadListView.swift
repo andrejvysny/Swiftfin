@@ -3,7 +3,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, you can obtain one at https://mozilla.org/MPL/2.0/.
 //
-// Copyright (c) 2025 Jellyfin & Jellyfin Contributors
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
 import Factory
@@ -66,7 +66,7 @@ struct ItemDownloadListView: View {
                 confirmDeleteEpisode()
             }
         } message: {
-            if let episodeToDelete = episodeToDelete {
+            if let episodeToDelete {
                 Text("Are you sure you want to delete '\(episodeToDelete.displayTitle)'?")
             }
         }
@@ -143,19 +143,14 @@ struct ItemDownloadListView: View {
 
     private func handleEpisodeTap(_ episode: DownloadedEpisode) {
         logger.info("User tapped on episode: \(episode.displayTitle)")
-        if let mediaSource = resolveMediaSource(for: episode.episodeItem, using: episode.versionInfo) {
-            router.route(
-                to: .videoPlayer(
-                    manager: AutoVideoPlayerManager(
-                        item: episode.episodeItem,
-                        mediaSource: mediaSource
-                    )
-                )
+        let mediaSource = resolveMediaSource(for: episode.episodeItem, using: episode.versionInfo)
+            ?? fallbackMediaSource(from: episode.versionInfo, item: episode.episodeItem)
+        router.route(
+            to: .videoPlayer(
+                item: episode.episodeItem,
+                mediaSource: mediaSource
             )
-        } else {
-            logger.warning("Unable to resolve media source for episode: \(episode.displayTitle). Routing to item view")
-            router.route(to: .item(item: episode.episodeItem))
-        }
+        )
     }
 
     private func deleteEpisode(_ episode: DownloadedEpisode) {
@@ -165,7 +160,7 @@ struct ItemDownloadListView: View {
     }
 
     private func confirmDeleteEpisode() {
-        guard let episodeToDelete = episodeToDelete else { return }
+        guard let episodeToDelete else { return }
 
         logger.info("Confirming deletion of episode: \(episodeToDelete.displayTitle)")
 
@@ -173,6 +168,15 @@ struct ItemDownloadListView: View {
         viewModel.deleteEpisode(episodeToDelete)
 
         self.episodeToDelete = nil
+    }
+
+    private func fallbackMediaSource(from versionInfo: VersionInfo?, item: BaseItemDto) -> MediaSourceInfo? {
+        let sourceId = versionInfo?.mediaSourceId ?? versionInfo?.versionId ?? item.id
+        guard let sourceId else { return nil }
+        var source = MediaSourceInfo()
+        source.id = sourceId
+        source.container = versionInfo?.container
+        return source
     }
 
     private func resolveMediaSource(for item: BaseItemDto, using versionInfo: VersionInfo?) -> MediaSourceInfo? {

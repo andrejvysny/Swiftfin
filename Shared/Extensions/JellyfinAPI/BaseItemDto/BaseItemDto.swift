@@ -418,13 +418,8 @@ extension BaseItemDto {
             return root
                 .appendingPathComponent(id)
         case .episode:
-            guard let seriesID = seriesID else { return nil }
-            let seriesFolder = root.appendingPathComponent(seriesID)
-            if let season = parentIndexNumber {
-                return seriesFolder
-                    .appendingPathComponent("Season-\(String(format: "%02d", season))")
-            }
-            return seriesFolder
+            guard let seriesID else { return nil }
+            return root.appendingPathComponent(seriesID)
         default:
             return nil
         }

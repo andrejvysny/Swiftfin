@@ -246,56 +246,37 @@ final class DownloadFileService: DownloadFileServicing {
     func mediaFileURL(for item: BaseItemDto, version: VersionInfo?) -> URL? {
         guard let downloadFolder = item.downloadFolder else { return nil }
 
-        var searchRoots: [URL] = []
+        let mediaFiles = regularMediaFiles(in: [downloadFolder])
+        guard !mediaFiles.isEmpty else { return nil }
 
-        if item.type == .episode,
-           let season = item.parentIndexNumber
-        {
-            let seasonFolder = downloadFolder.appendingPathComponent("Season-\(String(format: "%02d", season))")
-            if FileManager.default.fileExists(atPath: seasonFolder.path) {
-                searchRoots.append(seasonFolder)
-            }
-        }
-
-        if searchRoots.isEmpty {
-            searchRoots.append(downloadFolder)
-        }
-
-        let candidates: [String] = [
+        let explicitCandidates: [String] = [
             version?.mediaSourceId,
             version?.versionId,
-            item.id,
-        ].compactMap { $0 }
+        ].compactMap(\.self)
 
-        for root in searchRoots {
-            guard let enumerator = FileManager.default.enumerator(
-                at: root,
-                includingPropertiesForKeys: [.isRegularFileKey],
-                options: [.skipsHiddenFiles]
-            ) else { continue }
-
-            for case let url as URL in enumerator {
-                do {
-                    let values = try url.resourceValues(forKeys: [.isRegularFileKey])
-                    guard values.isRegularFile == true else { continue }
-
-                    let name = url.lastPathComponent
-                    guard !name.lowercased().contains("metadata") else { continue }
-
-                    if name.hasPrefix("Media.") {
-                        return url
-                    }
-
-                    if candidates.contains(where: { name.contains($0) }) {
-                        return url
-                    }
-                } catch {
-                    continue
-                }
+        for candidate in explicitCandidates {
+            if let match = mediaFiles.first(where: { filename($0).contains(candidate) }) {
+                return match
             }
         }
 
-        return nil
+        if let itemId = item.id,
+           explicitCandidates.contains(where: { $0 != itemId })
+        {
+            return nil
+        }
+
+        if let itemId = item.id,
+           let match = mediaFiles.first(where: { filename($0).contains(itemId) })
+        {
+            return match
+        }
+
+        if let generic = mediaFiles.first(where: { $0.lastPathComponent.hasPrefix("Media.") }) {
+            return generic
+        }
+
+        return mediaFiles.first
     }
 
     func getDownloadedItemIds() -> [String] {
@@ -398,15 +379,14 @@ final class DownloadFileService: DownloadFileServicing {
     }
 
     private func createMediaFileDestination(downloadTask: DownloadTask, response: URLResponse?, downloadFolder: URL) throws -> URL {
-        let fileExtension: String
-        if let httpResponse = response as? HTTPURLResponse,
-           let contentType = httpResponse.mimeType
+        let fileExtension: String = if let httpResponse = response as? HTTPURLResponse,
+                                       let contentType = httpResponse.mimeType
         {
-            fileExtension = contentType.contains("mp4") ? ".mp4" :
+            contentType.contains("mp4") ? ".mp4" :
                 contentType.contains("mkv") ? ".mkv" :
                 ".\(downloadTask.container)"
         } else {
-            fileExtension = ".\(downloadTask.container)"
+            ".\(downloadTask.container)"
         }
 
         if downloadTask.item.type == .episode,
@@ -471,5 +451,35 @@ final class DownloadFileService: DownloadFileServicing {
 
         try FileManager.default.createDirectory(at: imagesFolder, withIntermediateDirectories: true)
         return imagesFolder.appendingPathComponent(filename)
+    }
+
+    private func regularMediaFiles(in roots: [URL]) -> [URL] {
+        roots
+            .compactMap { root -> [URL]? in
+                guard let enumerator = FileManager.default.enumerator(
+                    at: root,
+                    includingPropertiesForKeys: [.isRegularFileKey],
+                    options: [.skipsHiddenFiles]
+                ) else {
+                    return nil
+                }
+
+                return enumerator.compactMap { element in
+                    guard let url = element as? URL else { return nil }
+                    guard let values = try? url.resourceValues(forKeys: [.isRegularFileKey]), values.isRegularFile == true else {
+                        return nil
+                    }
+
+                    let name = filename(url)
+                    guard !name.lowercased().contains("metadata") else { return nil }
+                    return url
+                }
+            }
+            .flatMap(\.self)
+            .sorted { filename($0) < filename($1) }
+    }
+
+    private func filename(_ url: URL) -> String {
+        url.lastPathComponent
     }
 }

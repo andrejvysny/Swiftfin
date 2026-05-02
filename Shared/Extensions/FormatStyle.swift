@@ -276,5 +276,7 @@ struct Int64FileSizeFormatStyle: FormatStyle {
 }
 
 extension FormatStyle where Self == Int64FileSizeFormatStyle {
-    static var fileSize: Int64FileSizeFormatStyle { Int64FileSizeFormatStyle() }
+    static var fileSize: Int64FileSizeFormatStyle {
+        Int64FileSizeFormatStyle()
+    }
 }

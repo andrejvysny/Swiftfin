@@ -31,6 +31,7 @@ struct DownloadTask {
         case downloading(Double)
         case error(Error)
         case paused
+        case queued
         case ready
     }
 
@@ -47,7 +48,6 @@ struct DownloadTask {
     let deviceProfileId: String?
     let quality: DownloadQuality
 
-    var resumeData: Data?
     var retryCount: Int = 0
     let maxRetries: Int = 3
 

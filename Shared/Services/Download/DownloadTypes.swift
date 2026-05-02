@@ -106,6 +106,89 @@ enum DownloadQuality: Hashable, Equatable {
     case transcoded(PlaybackBitrate)
 }
 
+// MARK: - Codable Wrapper for DownloadQuality
+
+enum CodableDownloadQuality: Codable, Equatable {
+    case original
+    case transcoded(Int)
+
+    init(from quality: DownloadQuality) {
+        switch quality {
+        case .original:
+            self = .original
+        case let .transcoded(bitrate):
+            self = .transcoded(bitrate.rawValue)
+        }
+    }
+
+    func toDownloadQuality() -> DownloadQuality {
+        switch self {
+        case .original:
+            return .original
+        case let .transcoded(rawValue):
+            if let bitrate = PlaybackBitrate(rawValue: rawValue) {
+                return .transcoded(bitrate)
+            }
+            return .original
+        }
+    }
+}
+
+// MARK: - Active Download Record
+
+struct ActiveDownloadRecord: Codable, Identifiable {
+    let id: UUID
+    let itemId: String
+    let storageItemId: String?
+    let episodeId: String?
+    let mediaSourceId: String?
+    let versionId: String?
+    let container: String
+    let quality: CodableDownloadQuality
+    let isStatic: Bool
+    let allowVideoStreamCopy: Bool
+    let allowAudioStreamCopy: Bool
+    let deviceId: String?
+    let deviceProfileId: String?
+    let downloadURL: URL
+    let startedAt: Date
+    var urlSessionTaskIdentifier: Int?
+    var lastKnownProgress: Double
+    var status: ActiveDownloadStatus
+    var queuePosition: Int?
+
+    enum ActiveDownloadStatus: String, Codable {
+        case active
+        case paused
+        case queued
+        case waitingForReconnect
+        case forceQuitCancelled
+    }
+}
+
+// MARK: - Recovery Result
+
+struct RecoveryResult {
+    let reconnected: [(record: ActiveDownloadRecord, urlSessionTaskIdentifier: Int)]
+    let orphaned: [ActiveDownloadRecord]
+}
+
+// MARK: - Download Recovery Error
+
+enum DownloadRecoveryError: Error, LocalizedError {
+    case forceQuitCancelled
+    case sessionExpired
+
+    var errorDescription: String? {
+        switch self {
+        case .forceQuitCancelled:
+            "Download was cancelled because the app was force-quit"
+        case .sessionExpired:
+            "Download session expired"
+        }
+    }
+}
+
 struct DownloadJob {
     let type: DownloadJobType
     let taskID: UUID
@@ -123,11 +206,11 @@ enum MediaValidationError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case let .invalidHTTPStatus(code):
-            return "Invalid HTTP status: \(code)"
+            "Invalid HTTP status: \(code)"
         case let .unacceptableContentType(type):
-            return "Unacceptable content type: \(type ?? "unknown")"
+            "Unacceptable content type: \(type ?? "unknown")"
         case let .suspiciouslySmallFile(size):
-            return "Downloaded media file is too small (\(size) bytes)"
+            "Downloaded media file is too small (\(size) bytes)"
         }
     }
 }
@@ -189,22 +272,28 @@ protocol DownloadImageManaging {
 
 protocol DownloadSessionManaging {
     var delegate: DownloadSessionDelegate? { get set }
-    func start(url: URL, taskID: UUID, jobType: DownloadJobType) async throws
+    var backgroundCompletionHandler: (() -> Void)? { get set }
+    func start(url: URL, taskID: UUID, jobType: DownloadJobType) async throws -> Int
     func pause(taskID: UUID)
-    func resume(taskID: UUID, with resumeData: Data?) async throws
+    func resume(taskID: UUID, with resumeData: Data?) async throws -> Int
     func cancel(taskID: UUID)
     func getAllTasks() -> [URLSessionDownloadTask]
 
     // Job management methods
     func getDownloadJob(for taskIdentifier: Int) -> DownloadJob?
     func removeDownloadJob(for taskIdentifier: Int)
+
+    // Recovery
+    func recoverActiveDownloads(records: [ActiveDownloadRecord]) async -> RecoveryResult
 }
 
 // MARK: - Delegate Protocol
 
+@MainActor
 protocol DownloadSessionDelegate: AnyObject {
     func sessionDidCompleteDownload(taskIdentifier: Int, location: URL, response: URLResponse?)
     func sessionDidUpdateProgress(taskIdentifier: Int, progress: Double)
     func sessionDidCompleteWithError(taskIdentifier: Int, error: Error?)
+    func sessionDidSaveResumeData(_ data: Data, for taskIdentifier: Int)
     func sessionDidFinishBackgroundEvents()
 }
