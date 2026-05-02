@@ -11,13 +11,15 @@ import SwiftUI
 
 extension NavigationRoute {
 
-    static let downloadList = NavigationRoute(
-        id: "downloadList"
-    ) {
-        #if os(iOS)
-        DownloadListView()
-        #else
-        EmptyView()
-        #endif
+    static var downloadList: NavigationRoute {
+        NavigationRoute(
+            id: "downloadList"
+        ) {
+            #if os(iOS)
+            DownloadListView(viewModel: .init())
+            #else
+            EmptyView()
+            #endif
+        }
     }
 }

@@ -99,6 +99,7 @@ class ItemViewModel: ViewModel, Stateful {
 
     // MARK: init
 
+    @MainActor
     init(item: BaseItemDto) {
         self.item = item
         super.init()
@@ -126,6 +127,7 @@ class ItemViewModel: ViewModel, Stateful {
             .store(in: &cancellables)
     }
 
+    @MainActor
     convenience init(episode: BaseItemDto) {
         let shellSeriesItem = BaseItemDto(id: episode.seriesID, name: episode.seriesName)
         self.init(item: shellSeriesItem)
@@ -304,7 +306,7 @@ class ItemViewModel: ViewModel, Stateful {
     }
 
     private func getFullItem() async throws -> BaseItemDto {
-        try await item.getFullItem(userSession: userSession)
+        try await item.getFullItem(userSession: userSession, sendNotification: true)
     }
 
     private func getSimilarItems() async -> [BaseItemDto] {

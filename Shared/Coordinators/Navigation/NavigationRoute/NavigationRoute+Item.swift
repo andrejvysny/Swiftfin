@@ -63,10 +63,11 @@ extension NavigationRoute {
     }
     #endif
 
+    @MainActor
     static func castAndCrew(people: [BaseItemPerson], itemID: String?) -> NavigationRoute {
         let id: String? = itemID == nil ? nil : "castAndCrew-\(itemID!)"
         let viewModel = PagingLibraryViewModel(
-            title: L10n.castAndCrew,
+            title: L10n.castAndCrew.localizedCapitalized,
             id: id,
             people
         )
@@ -89,6 +90,7 @@ extension NavigationRoute {
         }
     }
 
+    @MainActor
     static func editGenres(item: BaseItemDto) -> NavigationRoute {
         NavigationRoute(id: "editGenres") {
             EditItemElementView<String>(
@@ -101,30 +103,17 @@ extension NavigationRoute {
         }
     }
 
-    static func editSubtitles(item: BaseItemDto) -> NavigationRoute {
-        NavigationRoute(id: "editSubtitles") {
-            ItemSubtitlesView(item: item)
-        }
-    }
-
-    static func uploadSubtitle(viewModel: SubtitleEditorViewModel) -> NavigationRoute {
-        NavigationRoute(
-            id: "uploadSubtitle",
-            style: .sheet
-        ) {
-            ItemSubtitleUploadView(viewModel: viewModel)
-        }
-    }
-
-    static func editMetadata(item: BaseItemDto) -> NavigationRoute {
+    @MainActor
+    static func editMetadata(viewModel: ItemEditorViewModel<BaseItemDto>) -> NavigationRoute {
         NavigationRoute(
             id: "editMetadata",
             style: .sheet
         ) {
-            EditMetadataView(viewModel: ItemEditorViewModel(item: item))
+            EditMetadataView(viewModel: viewModel)
         }
     }
 
+    @MainActor
     static func editPeople(item: BaseItemDto) -> NavigationRoute {
         NavigationRoute(id: "editPeople") {
             EditItemElementView<BaseItemPerson>(
@@ -137,6 +126,7 @@ extension NavigationRoute {
         }
     }
 
+    @MainActor
     static func editStudios(item: BaseItemDto) -> NavigationRoute {
         NavigationRoute(id: "editStudios") {
             EditItemElementView<NameGuidPair>(
@@ -149,6 +139,16 @@ extension NavigationRoute {
         }
     }
 
+    static func editSubtitles(item: BaseItemDto) -> NavigationRoute {
+        NavigationRoute(
+            id: "editSubtitles",
+            style: .sheet
+        ) {
+            ItemSubtitlesView(item: item)
+        }
+    }
+
+    @MainActor
     static func editTags(item: BaseItemDto) -> NavigationRoute {
         NavigationRoute(id: "editTags") {
             EditItemElementView<String>(
@@ -175,15 +175,25 @@ extension NavigationRoute {
             id: "identifyItemResults",
             style: .sheet
         ) {
-            IdentifyItemView.RemoteSearchResultView(
+            IdentifyItemResultView(
                 viewModel: viewModel,
                 result: result
             )
         }
     }
+
+    static func uploadSubtitle(viewModel: ItemSubtitlesViewModel) -> NavigationRoute {
+        NavigationRoute(
+            id: "uploadSubtitle",
+            style: .sheet
+        ) {
+            ItemSubtitleUploadView(viewModel: viewModel)
+        }
+    }
+
     #endif
 
-    static func searchSubtitle(viewModel: SubtitleEditorViewModel) -> NavigationRoute {
+    static func searchSubtitle(viewModel: ItemSubtitlesViewModel) -> NavigationRoute {
         NavigationRoute(
             id: "searchSubtitle",
             style: .sheet
@@ -202,7 +212,7 @@ extension NavigationRoute {
     }
 
     #if os(iOS)
-    static func itemEditor(viewModel: ItemViewModel) -> NavigationRoute {
+    static func itemEditor(viewModel: ItemEditorViewModel<BaseItemDto>) -> NavigationRoute {
         NavigationRoute(
             id: "itemEditor",
             style: .sheet
@@ -246,12 +256,12 @@ extension NavigationRoute {
     }
     #endif
 
-    static func itemMetadataRefresh(viewModel: RefreshMetadataViewModel) -> NavigationRoute {
+    static func itemMetadataRefresh(viewModel: ItemEditorViewModel<BaseItemDto>) -> NavigationRoute {
         NavigationRoute(
             id: "itemMetadataRefresh",
             style: .sheet
         ) {
-            RefreshMetadataView(viewModel: viewModel)
+            ItemRefreshView(viewModel: viewModel)
         }
     }
 

@@ -8,7 +8,7 @@
 
 import Defaults
 import SwiftUI
-import SwiftUIIntrospect
+@_spi(Advanced) import SwiftUIIntrospect
 
 extension View {
 
@@ -32,8 +32,7 @@ extension View {
     @ViewBuilder
     func navigationBarFilterDrawer(
         viewModel: FilterViewModel,
-        types: [ItemFilterType],
-        onSelect: @escaping (NavigationBarFilterDrawer.Parameters) -> Void
+        types: [ItemFilterType]
     ) -> some View {
         if types.isEmpty {
             self
@@ -43,7 +42,6 @@ extension View {
                     viewModel: viewModel,
                     types: types
                 )
-                .onSelect(onSelect)
             }
         }
     }
@@ -79,8 +77,12 @@ extension View {
 
     @ViewBuilder
     func listRowCornerRadius(_ radius: CGFloat) -> some View {
-        introspect(.listCell, on: .iOS(.v16), .iOS(.v17), .iOS(.v18)) { cell in
-            cell.layer.cornerRadius = radius
+        introspect(.listCell, on: .iOS(.v16...)) { cell in
+            if #available(iOS 26, *) {
+                cell.cornerConfiguration = .uniformCorners(radius: .fixed(radius))
+            } else {
+                cell.layer.cornerRadius = radius
+            }
         }
     }
 }

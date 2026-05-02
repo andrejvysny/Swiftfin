@@ -22,7 +22,7 @@ struct SearchView: View {
     private var searchQuery = ""
 
     @StateObject
-    private var viewModel = SearchViewModel()
+    private var viewModel = SearchViewModel(filterViewModel: .init())
 
     @ViewBuilder
     private var suggestionsView: some View {
@@ -170,7 +170,7 @@ struct SearchView: View {
             case .initial:
                 if viewModel.hasNoResults {
                     if viewModel.canSearch {
-                        Text(L10n.noResults)
+                        ContentUnavailableView.search
                     } else {
                         suggestionsView
                     }
