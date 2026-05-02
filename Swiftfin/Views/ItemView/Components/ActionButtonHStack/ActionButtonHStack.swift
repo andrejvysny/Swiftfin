@@ -151,7 +151,7 @@ extension ItemView {
             .fontWeight(.semibold)
             .buttonStyle(.material)
             .labelStyle(.iconOnly)
-            .confirmationDialog(L10n.manage, isPresented: $showDownloadManagementActions, titleVisibility: .visible) {
+            .confirmationDialog(L10n.management, isPresented: $showDownloadManagementActions, titleVisibility: .visible) {
                 Button(L10n.delete, role: .destructive) {
                     _ = downloadManager.deleteDownloadedMedia(item: viewModel.item)
                 }

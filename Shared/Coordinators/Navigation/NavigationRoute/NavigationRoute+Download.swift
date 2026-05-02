@@ -16,7 +16,7 @@ extension NavigationRoute {
             id: "downloadList"
         ) {
             #if os(iOS)
-            DownloadListView(viewModel: .init())
+            DownloadListView()
             #else
             EmptyView()
             #endif

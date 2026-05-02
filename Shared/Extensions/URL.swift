@@ -18,6 +18,17 @@ extension URL {
 
 extension URL {
 
+    static var tmp: URL {
+        temporaryDirectory
+            .appendingPathComponent("Swiftfin", isDirectory: true)
+    }
+
+    static var downloads: URL {
+        FileManager.default
+            .urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Downloads", isDirectory: true)
+    }
+
     static let swiftfinGithub: URL = URL(string: "https://github.com/jellyfin/Swiftfin")!
 
     static let swiftfinGithubLicense: URL = URL(string: "https://github.com/jellyfin/Swiftfin/blob/main/LICENSE.md")!
