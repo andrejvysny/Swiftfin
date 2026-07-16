@@ -268,3 +268,15 @@ extension FormatStyle where Self == IntBitRateFormatStyle {
         IntBitRateFormatStyle()
     }
 }
+
+struct Int64FileSizeFormatStyle: FormatStyle {
+    func format(_ value: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: value, countStyle: .file)
+    }
+}
+
+extension FormatStyle where Self == Int64FileSizeFormatStyle {
+    static var fileSize: Int64FileSizeFormatStyle {
+        Int64FileSizeFormatStyle()
+    }
+}

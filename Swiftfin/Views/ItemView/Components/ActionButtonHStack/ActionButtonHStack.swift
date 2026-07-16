@@ -17,9 +17,15 @@ extension ItemView {
 
         @Default(.accentColor)
         private var accentColor
-
+        @Injected(\.downloadManager)
+        private var downloadManager: DownloadManager
+        @Router
+        private var router
         @StoredValue(.User.enabledTrailers)
         private var enabledTrailers: TrailerSelection
+
+        @State
+        private var showDownloadManagementActions = false
 
         @ObservedObject
         private var viewModel: ItemViewModel
@@ -112,11 +118,46 @@ extension ItemView {
                         view.aspectRatio(1, contentMode: .fit)
                     }
                 }
+
+                // MARK: Download Task Button
+
+                if viewModel.item.type == .episode || viewModel.item.type == .movie {
+
+                    DownloadActionButtonWithProgress(
+                        item: viewModel.item,
+                        shouldAutoStart: viewModel.item.mediaSources?.count ?? 0 <= 1, // Only auto-start for single source
+                        onStartTap: {
+                            if let sources = viewModel.item.mediaSources, sources.count > 1 {
+                                router.route(to: .itemDownloadSelection(item: viewModel.item))
+                            } else {
+                                // Single source - the ViewModel will handle the download start automatically
+                                // No additional action needed here as the button will call viewModel.start()
+                            }
+                        },
+                        onCompletedTap: {
+                            if let sources = viewModel.item.mediaSources, sources.count > 1 {
+                                router.route(to: .itemDownloadSelection(item: viewModel.item))
+                            } else {
+                                showDownloadManagementActions = true
+                            }
+                        }
+                    )
+                    .if(equalSpacing) { view in
+                        view.frame(maxWidth: .infinity)
+                    }
+                }
             }
             .font(.title3)
             .fontWeight(.semibold)
             .buttonStyle(.material)
             .labelStyle(.iconOnly)
+            .confirmationDialog(L10n.management, isPresented: $showDownloadManagementActions, titleVisibility: .visible) {
+                Button(L10n.delete, role: .destructive) {
+                    _ = downloadManager.deleteDownloadedMedia(item: viewModel.item)
+                }
+
+                Button(L10n.cancel, role: .cancel) {}
+            }
         }
     }
 }

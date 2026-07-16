@@ -26,15 +26,13 @@ struct ServerCheckView: View {
                     ProgressView()
                 }
             case .error:
-                viewModel.error.map {
-                    ErrorView(error: $0)
-                }
+                DownloadListView(
+                    error: viewModel.error,
+                    onRetry: { viewModel.checkServer() }
+                )
             }
         }
         .animation(.linear(duration: 0.1), value: viewModel.state)
-        .refreshable {
-            viewModel.checkServer()
-        }
         .onFirstAppear {
             viewModel.checkServer()
         }
@@ -42,15 +40,6 @@ struct ServerCheckView: View {
             switch event {
             case .connected:
                 router.root(.mainTab)
-            }
-        }
-        .topBarTrailing {
-
-            SettingsBarButton(
-                server: viewModel.userSession.server,
-                user: viewModel.userSession.user
-            ) {
-                router.route(to: .settings)
             }
         }
     }

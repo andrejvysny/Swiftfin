@@ -52,8 +52,18 @@ extension NavigationRoute {
         mediaSource: MediaSourceInfo? = nil,
         queue: (any MediaPlayerQueue)? = nil
     ) -> NavigationRoute {
+        let downloadManager = Container.shared.downloadManager()
+        let requestedMediaSourceId = mediaSource?.id
+        let offlinePlaybackInfo = downloadManager.playbackInfo(for: item, mediaSourceId: requestedMediaSourceId)
+
         let provider = MediaPlayerItemProvider(item: item) { item in
-            try await MediaPlayerItem.build(for: item, mediaSource: mediaSource)
+            if let offlinePlaybackInfo {
+                return await MainActor.run {
+                    MediaPlayerItem.buildOffline(from: offlinePlaybackInfo)
+                }
+            }
+
+            return try await MediaPlayerItem.build(for: item, mediaSource: mediaSource)
         }
         return Self.videoPlayer(provider: provider, queue: queue)
     }

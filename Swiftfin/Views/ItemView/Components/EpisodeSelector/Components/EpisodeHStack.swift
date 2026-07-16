@@ -26,6 +26,24 @@ extension SeriesEpisodeSelector {
         private var proxy = CollectionHStackProxy()
 
         let playButtonItem: BaseItemDto?
+        var isSelectionMode: Bool = false
+        @Binding
+        var selectedEpisodeIDs: Set<String>
+        var onEnterSelectionMode: ((String) -> Void)?
+
+        init(
+            viewModel: SeasonItemViewModel,
+            playButtonItem: BaseItemDto?,
+            isSelectionMode: Bool = false,
+            selectedEpisodeIDs: Binding<Set<String>> = .constant([]),
+            onEnterSelectionMode: ((String) -> Void)? = nil
+        ) {
+            self._viewModel = ObservedObject(wrappedValue: viewModel)
+            self.playButtonItem = playButtonItem
+            self.isSelectionMode = isSelectionMode
+            self._selectedEpisodeIDs = selectedEpisodeIDs
+            self.onEnterSelectionMode = onEnterSelectionMode
+        }
 
         private func contentView(viewModel: SeasonItemViewModel) -> some View {
             CollectionHStack(
@@ -33,7 +51,23 @@ extension SeriesEpisodeSelector {
                 id: \.unwrappedIDHashOrZero,
                 columns: UIDevice.isPhone ? 1.5 : 3.5
             ) { episode in
-                SeriesEpisodeSelector.EpisodeCard(episode: episode)
+                SeriesEpisodeSelector.EpisodeCard(
+                    episode: episode,
+                    isSelectionMode: isSelectionMode,
+                    isSelected: selectedEpisodeIDs.contains(episode.id ?? ""),
+                    onToggleSelection: {
+                        guard let id = episode.id else { return }
+                        if selectedEpisodeIDs.contains(id) {
+                            selectedEpisodeIDs.remove(id)
+                        } else {
+                            selectedEpisodeIDs.insert(id)
+                        }
+                    },
+                    onEnterSelectionMode: {
+                        guard let id = episode.id else { return }
+                        onEnterSelectionMode?(id)
+                    }
+                )
             }
             .clipsToBounds(false)
             .scrollBehavior(.continuousLeadingEdge)

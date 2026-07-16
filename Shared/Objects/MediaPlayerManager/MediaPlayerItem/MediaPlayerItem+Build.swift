@@ -203,7 +203,7 @@ extension MediaPlayerItem {
                 isStatic: true,
                 tag: item.etag,
                 playSessionID: playSessionID,
-                mediaSourceID: itemID
+                mediaSourceID: mediaSource.id
             )
 
             let videoStreamRequest = Paths.getVideoStream(

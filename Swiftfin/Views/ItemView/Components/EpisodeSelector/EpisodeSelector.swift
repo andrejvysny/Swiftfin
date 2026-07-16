@@ -6,6 +6,7 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
+import Factory
 import JellyfinAPI
 import SwiftUI
 
@@ -18,6 +19,15 @@ struct SeriesEpisodeSelector: View {
     private var didSelectPlayButtonSeason = false
     @State
     private var selection: SeasonItemViewModel.ID?
+
+    // Phase 4: Multi-select
+    @State
+    private var isSelectionMode = false
+    @State
+    private var selectedEpisodeIDs: Set<String> = []
+
+    @Injected(\.downloadManager)
+    private var downloadManager: DownloadManager
 
     private var selectionViewModel: SeasonItemViewModel? {
         viewModel.seasons.first(where: { $0.id == selection })
@@ -54,21 +64,108 @@ struct SeriesEpisodeSelector: View {
         }
     }
 
+    @ViewBuilder
+    private var selectionModeHeader: some View {
+        HStack {
+            Button {
+                if let selectionViewModel {
+                    let allIds = Set(selectionViewModel.elements.compactMap(\.id))
+                    if selectedEpisodeIDs == allIds {
+                        selectedEpisodeIDs.removeAll()
+                    } else {
+                        selectedEpisodeIDs = allIds
+                    }
+                }
+            } label: {
+                Text(selectedEpisodeIDs.isEmpty ? "Select All" : "Deselect All")
+                    .font(.subheadline)
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            if !selectedEpisodeIDs.isEmpty {
+                Button {
+                    downloadSelected()
+                } label: {
+                    Label("Download (\(selectedEpisodeIDs.count))", systemImage: "arrow.down.circle")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                }
+                .buttonStyle(.plain)
+            }
+
+            Button {
+                isSelectionMode = false
+                selectedEpisodeIDs.removeAll()
+            } label: {
+                Text(L10n.cancel)
+                    .font(.subheadline)
+                    .foregroundStyle(.red)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func downloadSelected() {
+        guard let selectionViewModel else { return }
+        let episodes = selectionViewModel.elements.filter {
+            selectedEpisodeIDs.contains($0.id ?? "")
+        }
+        _ = downloadManager.downloadItems(items: Array(episodes))
+        isSelectionMode = false
+        selectedEpisodeIDs.removeAll()
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
 
-            seasonSelectorMenu
+            if isSelectionMode {
+                selectionModeHeader
+                    .edgePadding(.horizontal)
+            } else {
+                HStack {
+                    seasonSelectorMenu
+                    Spacer()
+
+                    if let selectionViewModel, selectionViewModel.state == .content, !selectionViewModel.elements.isEmpty {
+                        // Select episodes button
+                        Button {
+                            isSelectionMode = true
+                        } label: {
+                            Image(systemName: "checklist")
+                                .foregroundStyle(.primary)
+                        }
+                        .buttonStyle(.plain)
+
+                        SeasonDownloadButton(
+                            seriesId: viewModel.item.id!,
+                            seasonViewModel: selectionViewModel
+                        )
+                    }
+                }
                 .edgePadding(.horizontal)
+            }
 
             Group {
                 if let selectionViewModel {
-                    EpisodeHStack(viewModel: selectionViewModel, playButtonItem: viewModel.playButtonItem)
+                    EpisodeHStack(
+                        viewModel: selectionViewModel,
+                        playButtonItem: viewModel.playButtonItem,
+                        isSelectionMode: isSelectionMode,
+                        selectedEpisodeIDs: $selectedEpisodeIDs,
+                        onEnterSelectionMode: { episodeId in
+                            isSelectionMode = true
+                            selectedEpisodeIDs.insert(episodeId)
+                        }
+                    )
                 } else {
                     LoadingHStack()
                 }
             }
             .transition(.opacity.animation(.linear(duration: 0.1)))
         }
+        .animation(.easeInOut(duration: 0.2), value: isSelectionMode)
         .onReceive(viewModel.playButtonItem.publisher) { newValue in
 
             guard !didSelectPlayButtonSeason else { return }

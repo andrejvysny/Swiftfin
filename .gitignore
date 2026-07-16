@@ -101,6 +101,7 @@ Thumbs.db
 # Swiftfin
 Shared/Generated/Strings.swift
 XcodeConfig/DevelopmentTeam.xcconfig
+.github/copilot-instructions.md
 
 # Other
 .idea

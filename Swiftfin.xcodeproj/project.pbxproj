@@ -232,7 +232,6 @@
 				ViewModels/AdminDashboard/ServerTasksViewModel.swift,
 				ViewModels/AdminDashboard/ServerUserAdminViewModel.swift,
 				ViewModels/AdminDashboard/ServerUsersViewModel.swift,
-				ViewModels/DownloadListViewModel.swift,
 				ViewModels/ItemAdministration/IdentifyItemViewModel.swift,
 				ViewModels/ItemAdministration/ItemEditorViewModel/GenreEditorViewModel.swift,
 				ViewModels/ItemAdministration/ItemEditorViewModel/PeopleEditorViewModel.swift,
@@ -1116,6 +1115,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = N2V5Q2PQJN;
 				ENABLE_BITCODE = NO;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;

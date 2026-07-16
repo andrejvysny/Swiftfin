@@ -6,16 +6,31 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
+import Factory
 import PreferencesView
 import UIKit
 
+@MainActor
 class AppDelegate: NSObject, UIApplicationDelegate {
+
+    static var backgroundSessionCompletionHandler: (() -> Void)?
 
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         true
+    }
+
+    func application(
+        _ application: UIApplication,
+        handleEventsForBackgroundURLSession identifier: String,
+        completionHandler: @escaping () -> Void
+    ) {
+        AppDelegate.backgroundSessionCompletionHandler = completionHandler
+
+        // Touch download manager to ensure background session reconnects
+        _ = Container.shared.downloadManager()
     }
 
     func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {

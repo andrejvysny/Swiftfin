@@ -16,21 +16,10 @@ extension NavigationRoute {
             id: "downloadList"
         ) {
             #if os(iOS)
-            DownloadListView(viewModel: .init())
+            DownloadListView()
             #else
             EmptyView()
             #endif
         }
     }
-
-    #if os(iOS)
-    static func downloadTask(downloadTask: DownloadTask) -> NavigationRoute {
-        NavigationRoute(
-            id: "downloadTask",
-            style: .sheet
-        ) {
-            DownloadTaskView(downloadTask: downloadTask)
-        }
-    }
-    #endif
 }
